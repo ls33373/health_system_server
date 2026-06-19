@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>스마트 보건실</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+</head>
+
+<body>
+  <div class="background-gradient"></div>
+  <div class="glass-container">
+    
+    <div class="left-panel">
+      <div class="left-footer">
+        <p style="font-size: 3rem; position: relative; margin-bottom: 5px;">
+          <i style="margin-bottom: 10px;" class="fa-solid fa-school"></i> 스마트 보건실
+        </p>
+         <p style="font-size: 2rem; margin-top: -1vh;" class="byCC">By Coding Class_
+         </p>
+      </div>
+
+      <div class="circle-widget">
+        <div class="widget-content">
+          <p class="widget-title">현재 대기</p>
+          <div id="main-wait-info">
+            <h1 id="main-wait-count" class="widget-number">0</h1>
+          </div>
+        </div>
+      </div>
+
+      <div id="weather-box" class="weather-pill">
+        <i id="w-icon" class="fa-solid fa-spinner fa-spin"></i>
+        <span id="w-temp">날씨 확인 중...</span>
+      </div>
+    </div>
+
+    <div class="right-panel">
+      
+      <div id="view-login" class="view">
+        <div style="margin-top: -3vh;" class="view-header">
+          <h3>안녕하세요! <br>오늘도 좋은 하루 보내세요!</h3>
+        </div>
+        <div class="app-grid">
+          <!-- <button class="app-icon-btn student" onclick="showView('view-student')">
+            <div class="icon-box">
+              <i class="fa-solid fa-user-pen"></i>
+            </div>
+            <span>진료 접수</span>
+          </button> -->
+
+          <button class="app-icon-btn admin" onclick="showView('view-teacher-login')">
+            <div class="icon-box">
+              <i class="fa-solid fa-user-doctor"></i>
+            </div>
+            <span>선생님 관리</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="view-student" class="view hidden">
+        <div style="margin-bottom: -20px; margin-top: -20px;" class="view-header">
+          <h3><i style="font-size: 35px;" class="fa-solid fa-notes-medical"></i> 방문 기록지 작성</h3>
+        </div>
+        
+        <div class="scroll-content">
+          <div class="input-group">
+            <input type="text" id="stId" placeholder="학번 (예: 10101)" />
+          </div>
+
+          <div class="section-group">
+            <p class="label">오늘 식사 하셨나요?</p>
+            <div class="segment-control">
+              <label><input type="radio" name="food" value="true" /><span>예</span></label>
+              <label><input type="radio" name="food" value="false" /><span>아니오</span></label>
+            </div>
+          </div>
+
+          <div class="section-group">
+            <p class="label">약물 알러지가 있나요?</p>
+            <div class="segment-control">
+              <label><input type="radio" name="allergy" value="true" /><span>있음</span></label>
+              <label><input type="radio" name="allergy" value="false" /><span>없음</span></label>
+            </div>
+          </div>
+
+          <div class="section-group">
+            <p class="label">증상</p>
+            <div class="select-wrapper">
+              <select id="stCat">
+                <option value="두통">두통</option>
+                <option value="호흡기">호흡기</option>
+                <option value="소화기">소화기</option>
+                <option value="순환기">순환기</option>
+                <option value="외상">외상</option>
+                <option value="피부">피부</option>
+                <option value="근골격계">근골격계</option>
+                <option value="비뇨생식기계">비뇨생식기계</option>
+                <option value="신경정신계">신경정신계</option>
+                <option value="이비인후과">이비인후과</option>
+                <option value="안과">안과</option>
+                <option value="구강">구강</option>
+                <option value="기타">기타</option>
+              </select>
+            </div>
+            <textarea style="margin-top: 10px;" id="stDetail" rows="3" placeholder="구체적인 증상을 적어주세요"></textarea>
+
+            <div style="margin-top: 15px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 2vh;">
+              <input type="checkbox" id="privacyAgree" style="width: 2vh; height: 2vh; cursor: pointer; margin: 0;">
+              <label for="privacyAgree" style="cursor: pointer; color: #555;">개인정보 수집 및 이용 동의</label>
+              <a href="#" onclick="showPrivacyPolicy()" style="color: #007AFF; font-weight: bold; text-decoration: none;">[내용 보기]</a>
+            </div>
+
+          </div>
+        </div>
+        
+
+        <div style="margin-top: 10px; margin-bottom: -15px;" class="action-buttons">
+          <button id="submit-btn" class="btn-primary" onclick="submitLog()">접수 완료</button>
+          <button class="btn-secondary" onclick="showView('view-login')">취소</button>
+        </div>
+      </div>
+
+      <div id="view-admin" class="view hidden">
+        <div class="view-header row">
+          <div>
+            <h3>진료 대기 현황</h3>
+            <!-- <button type="button" onclick="manualInput()">수동 입력</button> -->
+          </div>
+          <div class="mini-controls">
+            <button onclick="downloadModal()" class="icon-btn" title="엑셀 다운로드"><i class="fa-solid fa-file-csv" style="font-size: 2.8vh; transform: translate(0.55vh, 0vh);"></i></button>
+            <button onclick="location.reload()" class="icon-btn" title="로그아웃"><i class="fa-solid fa-right-from-bracket" style="font-size: 2.8vh; transform: translate(0.55vh, 0vh);"></i></button>
+            <div id="file-upload">
+              <input type="file" id="studentFile" accept=".xlsx" />
+              <button onclick="uploadStudents()">명단 업로드</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table id="admin-table">
+            <thead>
+              <tr>
+                <th>시간</th>
+                <th>학번</th>
+                <th>식사</th>
+                <th>알러지</th>
+                <th style="width: 80px;">증상</th> 
+                <th style="min-width: 140px;">자세한 증상</th> 
+                <th style="min-width: 140px;">진료/처방 내역</th>
+                <th>처리</th>
+                <th>내용 수정</th>
+              </tr>
+            </thead>
+            <tbody id="log-body">
+              </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="view-teacher-login" class="view hidden">
+        <div class="view-header">
+          <h2>로그인</h2>
+        </div>
+        <input style="margin-top: 20px;" type="password" id="pw" placeholder="●●●●" maxlength="4" />
+        <button style="margin-top: 40px; background-color: #007AFF; color: white;" onclick="adminLogin()">로그인</button>
+
+        <div style="margin-top: 30px; padding: 15px; font-size: 2vh; color: #ff5555; background: rgba(0,0,0,0.05); border-radius: 10px; text-align: center; border: 1px solid #ff5555; line-height: 1.5;">
+          <i class="fa-solid fa-triangle-exclamation"></i> <strong>보안 경고</strong><br>
+          관리자 페이지는 보건교사 전용입니다.<br>
+          무단 해킹 및 접근 시도 시, <strong>정보통신망법 제48조</strong>에 따라<br>
+          <strong>처벌</strong>받을 수 있습니다.
+        </div>
+        
+        <button style="position: fixed; top: 60px; right: 20px;" onclick="location.reload()" class="icon-btn" title="로그아웃"><i class="fa-solid fa-right-from-bracket"></i></button>
+      </div>
+      
+    </div> 
+  </div> 
+  <script src="/script.js"></script>
+
+
+  <!-- 확인 모달 -->
+  <div id="custom-modal" class="modal-overlay hidden" style="opacity: 0; pointer-events: none; transition: opacity 0.3s ease;">
+    <div class="modal-content" style="background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); padding: 4vh 5vh; border-radius: 2vh; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); min-width: 300px;">
+      <p id="modal-message" style="font-size: 2vh; font-weight: bold; margin-bottom: 3vh; color: var(--text-dark); white-space: pre-line;"></p>
+      <button onclick="closeModal()" class="blue-btn">확인</button>
+    </div>
+  </div>
+
+
+  <!-- 수정 모달 -->
+  <div id="edit-modal" class="modal-overlay" style="opacity: 0; pointer-events: none; transition: opacity 0.3s ease;">
+    <div class="edit-modal-content" style="background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); padding: 4vh 5vh; border-radius: 2vh; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); min-width: 300px;">
+      <p id="modal-message" style="font-size: 3vh; font-weight: bold; margin-bottom: 1vh; color: var(--text-dark);">처방 내용 수정</p>
+      <table>
+        <tr>
+          <td>시간</td>
+          <td>학번</td>
+          <td>식사</td>
+          <td>알러지</td>
+          <td>증상</td>
+          <td>자세한 증상</td>
+          <td>진료/처방 내역</td>
+        </tr>
+        <tr>
+          <td><p id="time"></p></td>
+          <td><p id="editId"></p></td>
+          <td>
+            <select id="editEat" class="directEat">
+              <option value="false" id="eat-F">X</option>
+              <option value="true" id="eat-T">O</option>
+            </select>
+          </td>
+          <td>
+            <select id="editAllergy" class="directAllergy">
+              <option value="false" id="allergy-F">X</option>
+              <option value="true" id="allergy-T">O</option>
+            </select>
+          </td>
+          <td>
+            <select id="editCat" class="directCat">
+              <option value="두통" id="cat-1">두통</option>
+              <option value="호흡기" id="cat-2">호흡기</option>
+              <option value="소화기" id="cat-3">소화기</option>
+              <option value="순환기" id="cat-4">순환기</option>
+              <option value="외상" id="cat-5">외상</option>
+              <option value="피부" id="cat-6">피부</option>
+              <option value="근골격계" id="cat-7">근골격계</option>
+              <option value="비뇨생식기계" id="cat-8">비뇨생식기계</option>
+              <option value="신경정신계" id="cat-9">신경정신계</option>
+              <option value="이비인후과" id="cat-10">이비인후과</option>
+              <option value="안과" id="cat-11">안과</option>
+              <option value="구강" id="cat-12">구강</option>
+              <option value="기타" id="cat-13">기타</option>
+            </select>
+          </td>
+          <td>
+            <input type="text" id="editDetail" class="directDetail" />
+          </td>
+          <td>
+            <input type="text" id="editTreatment" class="directTreatment" />
+          </td>
+        </tr>
+      </table>
+      <button onclick="closeEditModal('edit', this)" class="blue-btn">확인</button>
+      <button onclick="closeEditModal('cancel', this)" style="background: gray; color: white; border: none; padding: 1vh 3vh; border-radius: 1.5vh; font-size: 1.8vh; font-weight: bold; cursor: pointer;">취소</button>
+    </div>
+  </div>
+
+  <!-- 수동 입력 모달 -->
+  <div id="manual-input-modal" class="modal-overlay" style="opacity: 0; pointer-events: none; transition: opacity 0.3s ease;">
+    <div class="manual-input-modal-content" style="background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); padding: 4vh 5vh; border-radius: 2vh; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); min-width: 300px;">
+      <p id="modal-message" style="font-size: 3vh; font-weight: bold; margin-bottom: 1vh; color: var(--text-dark);">수동 입력</p>
+      <table>
+        <tr>
+          <td>시간</td>
+          <td>학번</td>
+          <td>식사</td>
+          <td>알러지</td>
+          <td>증상</td>
+          <td>자세한 증상</td>
+          <td>진료/처방 내역</td>
+        </tr>
+        <tr>
+          <td><input type="date" id="manual-date"></td>
+          <td><input type="text" id="manual-student-id"></td>
+          <td>
+            <select id="manualEat" class="directEat">
+              <option value="false" id="eat-F">X</option>
+              <option value="true" id="eat-T">O</option>
+            </select>
+          </td>
+          <td>
+            <select id="manualAllergy" class="directAllergy">
+              <option value="false" id="allergy-F">X</option>
+              <option value="true" id="allergy-T">O</option>
+            </select>
+          </td>
+          <td>
+            <select id="manualCat" class="directCat">
+              <option value="두통" id="cat-1">두통</option>
+              <option value="호흡기" id="cat-2">호흡기</option>
+              <option value="소화기" id="cat-3">소화기</option>
+              <option value="순환기" id="cat-4">순환기</option>
+              <option value="외상" id="cat-5">외상</option>
+              <option value="피부" id="cat-6">피부</option>
+              <option value="근골격계" id="cat-7">근골격계</option>
+              <option value="비뇨생식기계" id="cat-8">비뇨생식기계</option>
+              <option value="신경정신계" id="cat-9">신경정신계</option>
+              <option value="이비인후과" id="cat-10">이비인후과</option>
+              <option value="안과" id="cat-11">안과</option>
+              <option value="구강" id="cat-12">구강</option>
+              <option value="기타" id="cat-13">기타</option>
+            </select>
+          </td>
+          <td>
+            <input type="text" id="manualDetail" class="directDetail" />
+          </td>
+          <td>
+            <input type="text" id="manualTreatment" class="directTreatment" />
+          </td>
+        </tr>
+      </table>
+      <button onclick="saveData()" class="blue-btn">확인</button>
+      <button onclick="closeEditModal('cancel', this)" style="background: gray; color: white; border: none; padding: 1vh 3vh; border-radius: 1.5vh; font-size: 1.8vh; font-weight: bold; cursor: pointer;">취소</button>
+    </div>
+  </div>
+
+  <!-- 개인별 진료기록 확인 모달 -->
+  <div id="record-view-modal" class="modal-overlay" style="opacity: 0; pointer-events: none; transition: opacity 0.3s ease;">
+    <div id="record-view-content" class="record-view-modal-content" style="background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); padding: 2vh 5vh 4vh 5vh; border-radius: 2vh; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); min-width: 300px;">
+      <p id="modal-title" style="font-size: 3vh; font-weight: bold; margin-bottom: 1vh; color: var(--text-dark);">상세 진료기록 확인</p>
+      <p id="modal-subtitle" style="font-size: 2vh; margin-bottom: 1vh; color: var(--text-dark);"></p>
+
+      <div class="table-container" style="max-height: 50vh; overflow-y: auto;">
+        <table id="view-table">
+          <thead>
+            <tr>
+              <td>시간</td>
+              <td>식사</td>
+              <td>알러지</td>
+              <td>증상</td>
+              <td>자세한 증상</td>
+              <td>진료/처방 내역</td>
+            </tr>
+            <tr>
+              <td></td>
+              <td>
+                <select id="directEat" class="directEat">
+                  <option value="false" id="eat-F">X</option>
+                  <option value="true" id="eat-T">O</option>
+                </select>
+              </td>
+              <td>
+                <select id="directAllergy" class="directAllergy">
+                  <option value="false" id="allergy-F">X</option>
+                  <option value="true" id="allergy-T">O</option>
+                </select>
+              </td>
+              <td>
+                <select id="directCat" class="directCat">
+                  <option value="두통" id="cat-1">두통</option>
+                  <option value="호흡기" id="cat-2">호흡기</option>
+                  <option value="소화기" id="cat-3">소화기</option>
+                  <option value="순환기" id="cat-4">순환기</option>
+                  <option value="외상" id="cat-5">외상</option>
+                  <option value="피부" id="cat-6">피부</option>
+                  <option value="근골격계" id="cat-7">근골격계</option>
+                  <option value="비뇨생식기계" id="cat-8">비뇨생식기계</option>
+                  <option value="신경정신계" id="cat-9">신경정신계</option>
+                  <option value="이비인후과" id="cat-10">이비인후과</option>
+                  <option value="안과" id="cat-11">안과</option>
+                  <option value="구강" id="cat-12">구강</option>
+                  <option value="기타" id="cat-13">기타</option>
+                </select>
+              </td>
+              <td>
+                <input type="text" id="directDetail" class="directDetail" />
+              </td>
+              <td>
+                <input type="text" id="directTreatment" class="directTreatment" />
+              </td>
+              <td>
+                <button type="button" id="direct-submit-btn" class="blue-btn" onclick="submitData()">+ 추가</button>
+              </td>
+            </tr>
+          </thead>
+          <tbody id="view-table-body"></tbody>
+        </table>
+      </div>
+
+      <button id="close-btn" onclick="closeViewModal()" style="margin-top: 5px;">돌아가기</button>
+    </div>
+  </div>
+
+  <div id="download-modal" class="modal-overlay" style="opacity: 0; pointer-events: none; transition: opacity 0.3s ease;">
+    <div id="download-content" class="record-view-modal-content" style="background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); padding: 4vh 5vh; border-radius: 2vh; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); min-width: 300px;">
+      <p id="modal-message" style="font-size: 3vh; font-weight: bold; margin-bottom: 1vh; color: var(--text-dark);">엑셀 다운로드</p>
+
+      <div id="select-period">
+        <div id="start-date" style="margin: 20px 0px;">
+          <label for="select-start-date" style="font-weight: bold;">[시작 날짜 선택]</label>
+          <input type="date" id="select-start-date">
+        </div>
+        <div id="end-date">
+          <label for="select-end-date" style="font-weight: bold;">[종료 날짜 선택]</label>
+          <input type="date" id="select-end-date">
+        </div>
+      </div>
+
+      <button type="button" id="download-btn" onclick="startDownload()">다운로드</button>
+      <button id="close-btn" onclick="closeEditModal('cancel', this)">돌아가기</button>
+    </div>
+  </div>
+
+
+</body>
+</html>
