@@ -235,55 +235,89 @@ async function adminLogin() {
 // ============================================================
 // 8. 엑셀 다운로드
 // ============================================================
+// async function downloadCSV(filename, startDate, endDate) {
+//     const fileLoader = document.getElementById("file-upload");
+//     if (!fileLoader.classList.contains("hidden")) { // 명렬표 파일이 업로드 되지 않은 경우
+//         alert("먼저 명렬표 파일을 업로드 한 후에 시도하세요.");
+//     } else {
+//         const { data } = await _supabase.from('health_logs') // DB에서 데이터 받아오기
+//             .select('*')
+//             .gte("created_at", startDate)
+//             .lte("created_at", endDate)
+//             .order("created_at", { ascending: true });
+        
+//         // localStorage에서 명렬표 불러와서 이름 추가
+//         const studentMap = JSON.parse(localStorage.getItem("studentMap") || "{}");
+//         const dataWithName = data.map(row => ({
+//             ...row,
+//             name: studentMap[String(row.student_id)] || null
+//         }));
+
+//         // 서버에 요청 보내기
+//         fetch("/save", {
+//             method: "POST",
+//             headers: {
+//                 "Content-type": "application/json"
+//             },
+//             body: JSON.stringify(dataWithName)
+//         })
+//         .then((res) => {
+//             if (!res.ok) throw new Error('서버 오류');  // 에러 응답 체크
+//             return res.blob();
+//         })
+//         .then((blob) => { // 다운로드 URL 생성 후 자동 클릭 처리 -> 파일 다운로드
+//             const url = URL.createObjectURL(blob);
+//             const a = document.createElement('a');
+//             a.href = url;
+            
+//             const today = new Date().toLocaleDateString('ko-KR', {
+//                 year: 'numeric',
+//                 month: '2-digit',
+//                 day: '2-digit'
+//             }).replace(/\. /g, '-').replace('.', ''); // 2026-03-25 형태로 변환
+
+//             a.download = `${filename}.xlsx`;
+            
+//             a.click();
+//             URL.revokeObjectURL(url);
+//         })
+//         .catch((error) => console.error(error.message))
+//     }
+// }
+
 async function downloadCSV(filename, startDate, endDate) {
     const fileLoader = document.getElementById("file-upload");
-    if (!fileLoader.classList.contains("hidden")) { // 명렬표 파일이 업로드 되지 않은 경우
-        alert("먼저 명렬표 파일을 업로드 한 후에 시도하세요.");
-    } else {
-        const { data } = await _supabase.from('health_logs') // DB에서 데이터 받아오기
-            .select('*')
-            .gte("created_at", startDate)
-            .lte("created_at", endDate)
-            .order("created_at", { ascending: true });
+    if (!fileLoader.classList.contains("hidden")) {
+        return;
+    }   
+    
+    const { data, error } = await _supabase.from('health_logs')
+        .select('*')
+        .gte("created_at", startDate)
+        .lte("created_at", endDate)
+        .order("created_at", { ascending: false });                                                                                                                                       
         
-        // localStorage에서 명렬표 불러와서 이름 추가
-        const studentMap = JSON.parse(localStorage.getItem("studentMap") || "{}");
-        const dataWithName = data.map(row => ({
-            ...row,
-            name: studentMap[String(row.student_id)] || null
-        }));
-
-        // 서버에 요청 보내기
-        fetch("/save", {
-            method: "POST",
-            headers: {
-                "Content-type": "application/json"
-            },
-            body: JSON.stringify(dataWithName)
-        })
-        .then((res) => {
-            if (!res.ok) throw new Error('서버 오류');  // 에러 응답 체크
-            return res.blob();
-        })
-        .then((blob) => { // 다운로드 URL 생성 후 자동 클릭 처리 -> 파일 다운로드
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            
-            const today = new Date().toLocaleDateString('ko-KR', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit'
-            }).replace(/\. /g, '-').replace('.', ''); // 2026-03-25 형태로 변환
-
-            a.download = `${filename}.xlsx`;
-            
-            a.click();
-            URL.revokeObjectURL(url);
-        })
-        .catch((error) => console.error(error.message))
-    }
-}
+    if (error) { console.error(error); return; }
+    
+    const studentMap = JSON.parse(localStorage.getItem("studentMap") || "{}");
+    
+    const records = data.map(row => ({
+        "날짜": row.created_at.substr(0, 10),
+        "학번": row.student_id,
+        "이름": studentMap[String(row.student_id)] || null,
+        "식사 여부": row.eat ? "O" : "X",
+        "알러지 여부": row.allergy ? "O" : "X",
+        "증상": row.symptom_cat,
+        "세부 증상": row.symptom_detail,
+        "처방 내용": row.treatment_record,
+        "처리 상태": row.status === 'done' ? "처리 완료" : "처리 중"
+    }));
+    
+    const sheet = XLSX.utils.json_to_sheet(records);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Records');
+    XLSX.writeFile(workbook, `${filename}.xlsx`); 
+ }
 
 // 날짜 포멧팅 함수
 function dateFormatting(date, type) {
