@@ -19,6 +19,16 @@ const TIME_WEIGHTS = {
     '기타': 5
 };
 
+//// 토큰 불러오기
+function getToken() {
+    const token = localStorage.getItem("accessToken");
+    if (token) {
+        return token;
+    } else {
+        throw new Error("토큰이 존재하지 않습니다.");
+    }
+}
+
 // ============================================================
 // 3. 화면 전환 함수
 // ============================================================
@@ -124,10 +134,9 @@ async function fetchLogs() {
     let result;
 
     try {
-        const token = localStorage.getItem("accessToken");
         const response = await fetch(`${API_URL}/api/health/admin/logs`, {
             headers: {
-                Authorization: `Bearer ${token}`
+                Authorization: `Bearer ${getToken()}`
             }
         });
 
@@ -198,27 +207,63 @@ async function fetchLogs() {
 // ============================================================
 // 6. [수정됨] 완료 처리 (처방 내역 DB 반영 로직 추가)
 // ============================================================
-async function completeLog(id) {
-    // 💡 [수정] 입력창에서 처방 내역 가져오기
-    const treatmentText = document.getElementById(`treat-${id}`).value;
-    
-    if(!confirm("진료를 완료 처리하시겠습니까?")) return;
-    
-    // 1. DB 업데이트 (treatment_record 추가!)
-    const { error } = await _supabase
-        .from('health_logs')
-        .update({ 
-            status: 'done',
-            treatment_record: treatmentText // 👈 DB에 내역 저장!
-        })
-        .eq('id', id);
+async function completeLog(studentId) {
+    // // 💡 [수정] 입력창에서 처방 내역 가져오기
+    const treatment = document.getElementById(`treat-${studentId}`)
+    const treatmentText = treatment.value;
 
-    if (error) {
-        alert("처리에 실패했습니다: " + error.message);
+    if (treatmentText) {
+        if(!confirm(`진료 완료 처리를 하시겠습니까?\n처방 내용 : ${treatmentText}`)) return;
+
+        // DB 내용 업데이트
+        const response = await fetch(`${API_URL}/api/health/admin/logs/${studentId}/complete`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${getToken()}`
+            },
+            body: JSON.stringify({
+                "treatment_record": treatmentText
+            })
+        });
+        
+        const result = await response.json();
+
+        if (!response.ok) {
+            if (result.code === "E404") {
+                alert("입력한 학번에 맞는 학생의 진료 기록이 존재하지 않습니다.");
+                treatment.value = "";
+            } else if (result.code === "E400") {
+                alert("이미 진료 완료 처리 되었습니다.");
+                treatment.value = "";
+            } else {
+                alert("진료 완료 처리 중 오류가 발생했습니다.");
+                treatment.value = "";
+            }
+        } else {
+            alert("진료 완료 처리 되었습니다.");
+            await fetchLogs() // 리스트 갱신
+            await init(); // 대기 인원 수 계산
+        }
     } else {
-        await fetchLogs(); // 리스트 갱신
-        await init();      // 대기 인원수 갱신
+        alert("처방 내용을 입력하세요.");
     }
+    
+    // // 1. DB 업데이트 (treatment_record 추가!)
+    // const { error } = await _supabase
+    //     .from('health_logs')
+    //     .update({ 
+    //         status: 'done',
+    //         treatment_record: treatmentText // 👈 DB에 내역 저장!
+    //     })
+    //     .eq('id', id);
+
+    // if (error) {
+    //     alert("처리에 실패했습니다: " + error.message);
+    // } else {
+    //     await fetchLogs(); // 리스트 갱신
+    //     await init();      // 대기 인원수 갱신
+    // }
 }
 
 // ============================================================
@@ -759,10 +804,9 @@ async function searchLog(studentId) { // 학번에 대한 진료기록 조회
     // if (error) { alert("학생의 진료기록을 불러오는 중 오류가 발생했습니다.") }
 
     // 데이터 불러오기
-    const token = localStorage.getItem("accessToken");
     const response = await fetch(`${API_URL}/api/health/admin/logs/student/${studentId}`, {
         headers: {
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${getToken()}`
         }
     });
 
@@ -859,12 +903,11 @@ async function submitData() {
     // }  
 
     // 데이터 저장
-    const token = localStorage.getItem("accessToken");
     const response = await fetch(`${API_URL}/api/health/admin/logs/direct`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${getToken()}`
         },
         body: JSON.stringify({
             student_id: stId,
