@@ -570,17 +570,35 @@ async function closeEditModal(type, object) {
     
         // 시간 데이터 불러오기
         const logedTime = localStorage.getItem("time")
-    
-        // DB에 반영
-        const newData = {
-            student_id: studentId, eat: editedEat, allergy: editedAllergy,
-            symptom_cat: editedCat, symptom_detail: editedDetail, treatment_record: editedTreatment
+
+        // DB 내용 업데이트
+        const response = await fetch(`${API_URL}/api/health/admin/logs/${localStorage.getItem("dataId")}`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${getToken()}`
+            },
+            body: JSON.stringify({
+                "eat": editedEat,
+                "allergy": editedAllergy,
+                "symptom_cat": editedCat,
+                "symptom_detail": editedDetail,
+                "treatment_record": editedTreatment
+            })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            if (result.code === "E404") {
+                alert("데이터가 존재하지 않습니다.");
+            }
+        } else {
+            await init();
+            await fetchLogs();
         }
-    
-        const { data, error } = await _supabase.from('health_logs')
-            .update(newData)
-            .eq("created_at", logedTime)
-            .eq("student_id", studentId)
+
+
     } else if (type === "new") {
 
     }
@@ -619,10 +637,23 @@ async function editContent(object) {
     const closeBtn = document.getElementById("edit-close-btn")
 
     // 학생 데이터 불러오기
-    const { data, error } = await _supabase.from("health_logs").select("*").eq("student_id", studentId)
+    // const { data, error } = await _supabase.from("health_logs").select("*").eq("student_id", studentId)
+    const response = await fetch(`${API_URL}/api/health/admin/logs/student/${studentId}`, {
+        headers: {
+            Authorization: `Bearer ${getToken()}`
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`${studentId} 학생의 진료 기록을 불러오는 중에 오류가 발생했습니다.`);
+    }
+
+    const result = await response.json();
+    const data = result.data;
+
     data.forEach(d => {
-        if (error || !d) {
-            console.log(error)
+        if (!d) {
+            console.log("데이터가 존재하지 않습니다.");
         }
         else {
             // 수정하려는 학생의 기록이 여러개인 경우 선택한 기록만 필터링 (시간, 처방 내역으로 필터링)
@@ -662,6 +693,9 @@ async function editContent(object) {
 
                 // localStorage에 시간 데이터 저장
                 localStorage.setItem("time", d.created_at)
+
+                // 조회한 데이터의 id 값 저장
+                localStorage.setItem("dataId", d.id);
             }
         }
     })
