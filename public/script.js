@@ -726,13 +726,28 @@ function closeViewModal() {
 }
 
 async function searchLog(studentId) { // 학번에 대한 진료기록 조회
-    // 데이터 불러오기
-    const { data, error } = await _supabase.from('health_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .eq("student_id", studentId)
+    // // 데이터 불러오기
+    // const { data, error } = await _supabase.from('health_logs')
+    //     .select('*')
+    //     .order('created_at', { ascending: false })
+    //     .eq("student_id", studentId)
     
-    if (error) { alert("학생의 진료기록을 불러오는 중 오류가 발생했습니다.") }
+    // if (error) { alert("학생의 진료기록을 불러오는 중 오류가 발생했습니다.") }
+
+    // 데이터 불러오기
+    const token = localStorage.getItem("accessToken");
+    const response = await fetch(`${API_URL}/api/health/admin/logs/student/${studentId}`, {
+        headers: {
+            Authorization: `Bearer ${token}`
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error("데이터 조회 실패");
+    }
+
+    const result = await response.json();
+    const data = result.data;
 
     // 테이블에 띄우기
     const viewTable = document.getElementById("view-table-body");
