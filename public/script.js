@@ -122,15 +122,6 @@ async function submitLog() {
 // 5. 관리자 목록 불러오기 (처방 내역 입력칸 추가)
 // ============================================================
 async function fetchLogs() {
-    // 💡 [수정됨] .select('*') 로 처리하면 모든 컬럼을 가져옵니다. 
-    // 만약 특정 컬럼만 가져오고 있다면 treatment_record를 명시해야 합니다.
-    // const { data, error } = await _supabase.from('health_logs')
-    //     .select('*') 
-    //     .order('created_at', { ascending: false })
-    //     .limit(50);
-    
-    // if (error) return console.error("목록 로딩 실패:", error);
-
     let result;
 
     try {
@@ -248,22 +239,6 @@ async function completeLog(studentId) {
     } else {
         alert("처방 내용을 입력하세요.");
     }
-    
-    // // 1. DB 업데이트 (treatment_record 추가!)
-    // const { error } = await _supabase
-    //     .from('health_logs')
-    //     .update({ 
-    //         status: 'done',
-    //         treatment_record: treatmentText // 👈 DB에 내역 저장!
-    //     })
-    //     .eq('id', id);
-
-    // if (error) {
-    //     alert("처리에 실패했습니다: " + error.message);
-    // } else {
-    //     await fetchLogs(); // 리스트 갱신
-    //     await init();      // 대기 인원수 갱신
-    // }
 }
 
 // ============================================================
@@ -272,32 +247,6 @@ async function completeLog(studentId) {
 async function adminLogin() {
     const pwInput = document.getElementById('pw');
     const inputPw = pwInput.value;
-    
-    // DB에서 관리자 비밀번호 가져오기 (코드에 비밀번호 노출 X)
-    // const { data, error } = await _supabase.from("login").select("*").eq("id", 1).single();
-    
-    // if (error || !data) {
-    //     showModal("관리자 정보를 불러올 수 없습니다.");
-    //     return;
-    // }
-
-    // if (inputPw === data.password) {
-    //     pwInput.value = ''; // 성공 시 입력칸 비우기
-    //     showView('view-admin');
-
-    //     // localStorage에 명렬표가 저장되어 있으면 파일업로드 버튼 안 띄우기
-    //     const fileLoader = document.getElementById("file-upload");
-    //     const studentMap = localStorage.getItem("studentMap");
-    //     if (studentMap) { // 명렬표가 존재하면 -> 버튼 숨김 처리
-    //         fileLoader.classList.add("hidden");
-    //     } else { // 존재하지 않으면 -> 버튼 보이기
-    //         fileLoader.classList.remove("hidden");
-    //     }
-    // } else if (inputPw !== "") {
-    //     // 기존 alert 대신 예쁜 모달창 띄우기
-    //     showModal("비밀번호가 틀렸습니다.\n다시 확인해주세요.");
-    //     pwInput.value = ''; // 실패 시 다시 입력할 수 있게 칸 비우기
-    // }
 
     const response = await fetch(`${API_URL}/api/health/admin/auth/login`, {
         method: "POST",
@@ -519,32 +468,6 @@ async function getWeather() {
 // 10. 초기화 및 대기 인원 계산
 // ============================================================
 async function init() {
-    // // 'waiting' 상태인 사람만 가져옴
-    // const { data, count, error } = await _supabase
-    //     .from('health_logs')
-    //     .select('symptom_cat', { count: 'exact' })
-    //     .eq('status', 'waiting');
-
-    // if (!error) {
-    //     let totalMinutes = 0;
-    //     if (data) {
-    //         data.forEach(log => totalMinutes += (TIME_WEIGHTS[log.symptom_cat] || 5));
-    //     }
-
-    //     const infoDiv = document.getElementById('main-wait-info');
-    //     if (count > 0) {
-    //         infoDiv.innerHTML = `
-    //             <h1 style="font-size: 80px; margin:10;" class="widget-number">${count}명</h1>
-    //             <p style="font-size:1.3rem; margin-top:5px; color:#555;">(약 ${totalMinutes}분 대기)</p>
-    //         `;
-    //     } else {
-    //         infoDiv.innerHTML = `
-    //             <h1 class="widget-number" style="color:#000000; font-size:80px; margin:10;">0명</h1>
-    //             <p style="font-size:1.3rem; margin-top:5px; color:#000000 ; font-weight:bold;">바로 진료 가능</p>
-    //         `;
-    //     }
-    // }
-
     // 대기 인원 및 대기 시간 계산하여 화면에 적용
     const response = await fetch(`${API_URL}/api/health/logs/waiting`);
 
@@ -795,14 +718,6 @@ function closeViewModal() {
 }
 
 async function searchLog(studentId) { // 학번에 대한 진료기록 조회
-    // // 데이터 불러오기
-    // const { data, error } = await _supabase.from('health_logs')
-    //     .select('*')
-    //     .order('created_at', { ascending: false })
-    //     .eq("student_id", studentId)
-    
-    // if (error) { alert("학생의 진료기록을 불러오는 중 오류가 발생했습니다.") }
-
     // 데이터 불러오기
     const response = await fetch(`${API_URL}/api/health/admin/logs/student/${studentId}`, {
         headers: {
@@ -881,27 +796,7 @@ async function submitData() {
 
     // 무결성 검사
     if (!stId) { return alert("학번이 입력되지 않았습니다.")}
-
-    // // DB에 데이터 저장 (treatment_record 추가)
-    // const { error } = await _supabase.from('health_logs').insert([{
-    //     student_id: stId, 
-    //     name: null, 
-    //     eat: eat, 
-    //     allergy: allergy, 
-    //     symptom_cat: cat, 
-    //     symptom_detail: detail, 
-    //     treatment_record: treatment, // 추가됨
-    //     status: 'done' // 현장 접수 후 완료 처리를 위해 일단 대기로 둠 (원하면 'done'으로 변경 가능)
-    // }]);
-
-    // if (error) {
-    //     alert("오류 발생: " + error.message);
-    // } else {
-    //     await fetchLogs();
-    //     await init();
-    //     await searchLog(stId);
-    // }  
-
+    
     // 데이터 저장
     const response = await fetch(`${API_URL}/api/health/admin/logs/direct`, {
         method: "POST",
@@ -928,6 +823,7 @@ async function submitData() {
 
         await fetchLogs();
         await searchLog(stId);
+        await init();
     }
     
 }
