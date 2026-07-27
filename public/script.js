@@ -5,6 +5,9 @@ const SB_URL = 'https://akkdzfuauaeukqhdrydp.supabase.co';
 const SB_KEY = 'sb_publishable_aVul9T_gOi8NDd70diW_gA_q0Yzwotl';
 const _supabase = supabase.createClient(SB_URL, SB_KEY);
 
+// API 연동
+const API_URL = "http://localhost:8080";
+
 // ============================================================
 // 2. 설정: 증상별 대기 시간 가중치
 // ============================================================
@@ -112,14 +115,36 @@ async function submitLog() {
 async function fetchLogs() {
     // 💡 [수정됨] .select('*') 로 처리하면 모든 컬럼을 가져옵니다. 
     // 만약 특정 컬럼만 가져오고 있다면 treatment_record를 명시해야 합니다.
-    const { data, error } = await _supabase.from('health_logs')
-        .select('*') 
-        .order('created_at', { ascending: false })
-        .limit(50);
+    // const { data, error } = await _supabase.from('health_logs')
+    //     .select('*') 
+    //     .order('created_at', { ascending: false })
+    //     .limit(50);
     
-    if (error) return console.error("목록 로딩 실패:", error);
+    // if (error) return console.error("목록 로딩 실패:", error);
+
+    let result;
+
+    try {
+        const token = localStorage.getItem("accessToken");
+        const response = await fetch(`${API_URL}/api/health/admin/logs`, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error("목록 조회 실패");
+        }
+
+        result = await response.json();
+        console.log(`result :\n${result}`);
+    }
+    catch (error) {
+        console.log(error);
+    }
 
     const body = document.getElementById('log-body');
+    const data = result.data || [];
 
     // [현장 접수용 맨 윗줄]
     const inputRow = `
@@ -205,14 +230,55 @@ async function adminLogin() {
     const inputPw = pwInput.value;
     
     // DB에서 관리자 비밀번호 가져오기 (코드에 비밀번호 노출 X)
-    const { data, error } = await _supabase.from("login").select("*").eq("id", 1).single();
+    // const { data, error } = await _supabase.from("login").select("*").eq("id", 1).single();
     
-    if (error || !data) {
-        showModal("관리자 정보를 불러올 수 없습니다.");
-        return;
-    }
+    // if (error || !data) {
+    //     showModal("관리자 정보를 불러올 수 없습니다.");
+    //     return;
+    // }
 
-    if (inputPw === data.password) {
+    // if (inputPw === data.password) {
+    //     pwInput.value = ''; // 성공 시 입력칸 비우기
+    //     showView('view-admin');
+
+    //     // localStorage에 명렬표가 저장되어 있으면 파일업로드 버튼 안 띄우기
+    //     const fileLoader = document.getElementById("file-upload");
+    //     const studentMap = localStorage.getItem("studentMap");
+    //     if (studentMap) { // 명렬표가 존재하면 -> 버튼 숨김 처리
+    //         fileLoader.classList.add("hidden");
+    //     } else { // 존재하지 않으면 -> 버튼 보이기
+    //         fileLoader.classList.remove("hidden");
+    //     }
+    // } else if (inputPw !== "") {
+    //     // 기존 alert 대신 예쁜 모달창 띄우기
+    //     showModal("비밀번호가 틀렸습니다.\n다시 확인해주세요.");
+    //     pwInput.value = ''; // 실패 시 다시 입력할 수 있게 칸 비우기
+    // }
+
+    const response = await fetch(`${API_URL}/api/health/admin/auth/login`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            password: inputPw
+        })
+    });
+
+    const result = await response.json();
+    console.log(result);
+
+    // 에러 여부 저장
+    const isError = result.code[0] === "E" ? true : false;
+    
+    // 모달창 띄우기
+    if (isError) { // 로그인 실패
+        showModal("비밀번호가 틀렸습니다.\n다시 확인해주세요.");
+        pwInput.value = ''; // 실패 시 다시 입력할 수 있게 칸 비우기
+    } else { // 로그인 성공
+        // 토큰 저장
+        localStorage.setItem("accessToken", result.data.token);
+
         pwInput.value = ''; // 성공 시 입력칸 비우기
         showView('view-admin');
 
@@ -224,10 +290,6 @@ async function adminLogin() {
         } else { // 존재하지 않으면 -> 버튼 보이기
             fileLoader.classList.remove("hidden");
         }
-    } else if (inputPw !== "") {
-        // 기존 alert 대신 예쁜 모달창 띄우기
-        showModal("비밀번호가 틀렸습니다.\n다시 확인해주세요.");
-        pwInput.value = ''; // 실패 시 다시 입력할 수 있게 칸 비우기
     }
 }
 
@@ -235,56 +297,6 @@ async function adminLogin() {
 // ============================================================
 // 8. 엑셀 다운로드
 // ============================================================
-// async function downloadCSV(filename, startDate, endDate) {
-//     const fileLoader = document.getElementById("file-upload");
-//     if (!fileLoader.classList.contains("hidden")) { // 명렬표 파일이 업로드 되지 않은 경우
-//         alert("먼저 명렬표 파일을 업로드 한 후에 시도하세요.");
-//     } else {
-//         const { data } = await _supabase.from('health_logs') // DB에서 데이터 받아오기
-//             .select('*')
-//             .gte("created_at", startDate)
-//             .lte("created_at", endDate)
-//             .order("created_at", { ascending: true });
-        
-//         // localStorage에서 명렬표 불러와서 이름 추가
-//         const studentMap = JSON.parse(localStorage.getItem("studentMap") || "{}");
-//         const dataWithName = data.map(row => ({
-//             ...row,
-//             name: studentMap[String(row.student_id)] || null
-//         }));
-
-//         // 서버에 요청 보내기
-//         fetch("/save", {
-//             method: "POST",
-//             headers: {
-//                 "Content-type": "application/json"
-//             },
-//             body: JSON.stringify(dataWithName)
-//         })
-//         .then((res) => {
-//             if (!res.ok) throw new Error('서버 오류');  // 에러 응답 체크
-//             return res.blob();
-//         })
-//         .then((blob) => { // 다운로드 URL 생성 후 자동 클릭 처리 -> 파일 다운로드
-//             const url = URL.createObjectURL(blob);
-//             const a = document.createElement('a');
-//             a.href = url;
-            
-//             const today = new Date().toLocaleDateString('ko-KR', {
-//                 year: 'numeric',
-//                 month: '2-digit',
-//                 day: '2-digit'
-//             }).replace(/\. /g, '-').replace('.', ''); // 2026-03-25 형태로 변환
-
-//             a.download = `${filename}.xlsx`;
-            
-//             a.click();
-//             URL.revokeObjectURL(url);
-//         })
-//         .catch((error) => console.error(error.message))
-//     }
-// }
-
 async function downloadCSV(filename, startDate, endDate) {
     const fileLoader = document.getElementById("file-upload");
     if (!fileLoader.classList.contains("hidden")) {
