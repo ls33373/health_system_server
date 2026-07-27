@@ -1,6 +1,5 @@
 // ============================================================
 // 1. Supabase 설정
-// ============================================================
 const SB_URL = 'https://akkdzfuauaeukqhdrydp.supabase.co'; 
 const SB_KEY = 'sb_publishable_aVul9T_gOi8NDd70diW_gA_q0Yzwotl';
 const _supabase = supabase.createClient(SB_URL, SB_KEY);
@@ -475,17 +474,42 @@ async function getWeather() {
 // 10. 초기화 및 대기 인원 계산
 // ============================================================
 async function init() {
-    // 'waiting' 상태인 사람만 가져옴
-    const { data, count, error } = await _supabase
-        .from('health_logs')
-        .select('symptom_cat', { count: 'exact' })
-        .eq('status', 'waiting');
+    // // 'waiting' 상태인 사람만 가져옴
+    // const { data, count, error } = await _supabase
+    //     .from('health_logs')
+    //     .select('symptom_cat', { count: 'exact' })
+    //     .eq('status', 'waiting');
 
-    if (!error) {
-        let totalMinutes = 0;
-        if (data) {
-            data.forEach(log => totalMinutes += (TIME_WEIGHTS[log.symptom_cat] || 5));
-        }
+    // if (!error) {
+    //     let totalMinutes = 0;
+    //     if (data) {
+    //         data.forEach(log => totalMinutes += (TIME_WEIGHTS[log.symptom_cat] || 5));
+    //     }
+
+    //     const infoDiv = document.getElementById('main-wait-info');
+    //     if (count > 0) {
+    //         infoDiv.innerHTML = `
+    //             <h1 style="font-size: 80px; margin:10;" class="widget-number">${count}명</h1>
+    //             <p style="font-size:1.3rem; margin-top:5px; color:#555;">(약 ${totalMinutes}분 대기)</p>
+    //         `;
+    //     } else {
+    //         infoDiv.innerHTML = `
+    //             <h1 class="widget-number" style="color:#000000; font-size:80px; margin:10;">0명</h1>
+    //             <p style="font-size:1.3rem; margin-top:5px; color:#000000 ; font-weight:bold;">바로 진료 가능</p>
+    //         `;
+    //     }
+    // }
+
+    // 대기 인원 및 대기 시간 계산하여 화면에 적용
+    const response = await fetch(`${API_URL}/api/health/logs/waiting`);
+
+    if (!response.ok) {
+        throw new Error("대기 인원 조회에 실패하였습니다.");
+        console.log(error)
+    } else {
+        const result = await response.json();
+        const count = result.data.count;
+        const totalMinutes = result.data.estimated_minutes;
 
         const infoDiv = document.getElementById('main-wait-info');
         if (count > 0) {
@@ -750,13 +774,22 @@ async function searchLog(studentId) { // 학번에 대한 진료기록 조회
     const data = result.data;
 
     // 테이블에 띄우기
-    const viewTable = document.getElementById("view-table-body");
+    const viewTableBody = document.getElementById("view-table-body");
+
+    // 조회 결과 초기화
+    const viewTable = document.getElementById("view-table");
+    const rows = viewTable.querySelectorAll("tr"); 
+    
+    // 조회 내용만 삭제 -> 제목, 입력칸 삭제 X
+    for (let i = 2; i < rows.length; i++) {
+        rows[i].remove();
+    }
     
     // 각 데이터별로 처리
     data.forEach(d => {
         // 각 항목별 테이블 줄 생성
         const tr = document.createElement("tr");
-        viewTable.appendChild(tr);
+        viewTableBody.appendChild(tr);
         
         // 날짜 추가
         const timeTd = document.createElement("td");
@@ -805,23 +838,53 @@ async function submitData() {
     // 무결성 검사
     if (!stId) { return alert("학번이 입력되지 않았습니다.")}
 
-    // DB에 데이터 저장 (treatment_record 추가)
-    const { error } = await _supabase.from('health_logs').insert([{
-        student_id: stId, 
-        name: null, 
-        eat: eat, 
-        allergy: allergy, 
-        symptom_cat: cat, 
-        symptom_detail: detail, 
-        treatment_record: treatment, // 추가됨
-        status: 'done' // 현장 접수 후 완료 처리를 위해 일단 대기로 둠 (원하면 'done'으로 변경 가능)
-    }]);
+    // // DB에 데이터 저장 (treatment_record 추가)
+    // const { error } = await _supabase.from('health_logs').insert([{
+    //     student_id: stId, 
+    //     name: null, 
+    //     eat: eat, 
+    //     allergy: allergy, 
+    //     symptom_cat: cat, 
+    //     symptom_detail: detail, 
+    //     treatment_record: treatment, // 추가됨
+    //     status: 'done' // 현장 접수 후 완료 처리를 위해 일단 대기로 둠 (원하면 'done'으로 변경 가능)
+    // }]);
 
-    if (error) {
-        alert("오류 발생: " + error.message);
+    // if (error) {
+    //     alert("오류 발생: " + error.message);
+    // } else {
+    //     await fetchLogs();
+    //     await init();
+    //     await searchLog(stId);
+    // }  
+
+    // 데이터 저장
+    const token = localStorage.getItem("accessToken");
+    const response = await fetch(`${API_URL}/api/health/admin/logs/direct`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+            student_id: stId,
+            eat: eat,
+            allergy: allergy,
+            symptom_cat: cat,
+            symptom_detail: detail,
+            treatment_record: treatment
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error("진료 기록 저장에 실패했습니다.");
+        alert("진료 기록 저장 중 오류가 발생했습니다.");
     } else {
+        const result = await response.json();
+        console.log(result);
+
         await fetchLogs();
-        await init();
         await searchLog(stId);
-    }  
+    }
+    
 }
