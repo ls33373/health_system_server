@@ -93,15 +93,50 @@ async function submitLog() {
     const food = foodChecked.value === 'true';
     const allergy = allergyChecked.value === 'true';
 
-    // 2. DB에 전송
-    const { error } = await _supabase.from('health_logs').insert([{
-        student_id: stId, eat: food, allergy: allergy, 
-        symptom_cat: cat, symptom_detail: detail, status: 'waiting',
-        is_agreed: true
-    }]);
+    // // 2. DB에 전송
+    // const { error } = await _supabase.from('health_logs').insert([{
+    //     student_id: stId, eat: food, allergy: allergy, 
+    //     symptom_cat: cat, symptom_detail: detail, status: 'waiting',
+    //     is_agreed: true
+    // }]);
 
-    if (error) {
-        showModal("오류 발생: " + error.message);
+    // if (error) {
+    //     showModal("오류 발생: " + error.message);
+    // } else {
+    //     // 성공 시 띄우는 알림도 모달로 변경
+    //     showModal("접수가 완료되었습니다.\n자리에 앉아 대기해주세요.");
+        
+    //     // 3. 폼 초기화
+    //     document.getElementById('stId').value = '';
+    //     document.getElementById('stDetail').value = '';
+    //     if (foodChecked) foodChecked.checked = false;
+    //     if (allergyChecked) allergyChecked.checked = false;
+        
+    //     // 대기 인원 갱신 및 첫 화면으로 이동
+    //     init(); 
+    //     showView('view-login');
+    // }
+
+    // DB 저장
+    const response = await fetch(`${API_URL}/api/health/student/logs`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            "student_id": stId,
+            "eat": food,
+            "allergy": allergy,
+            "symptom_cat": cat,
+            "symptom_detail": detail,
+            "is_agreed": privacyAgree.checked
+        })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+        alert("데이터 저장 중 오류가 발생했습니다.")
     } else {
         // 성공 시 띄우는 알림도 모달로 변경
         showModal("접수가 완료되었습니다.\n자리에 앉아 대기해주세요.");
@@ -133,6 +168,7 @@ async function fetchLogs() {
 
         if (!response.ok) {
             throw new Error("목록 조회 실패");
+            return;
         }
 
         result = await response.json();
@@ -140,6 +176,7 @@ async function fetchLogs() {
     }
     catch (error) {
         console.log(error);
+        return; 
     }
 
     const body = document.getElementById('log-body');
@@ -656,6 +693,7 @@ async function editContent(object) {
 
     if (!response.ok) {
         throw new Error(`${studentId} 학생의 진료 기록을 불러오는 중에 오류가 발생했습니다.`);
+        return;
     }
 
     const result = await response.json();
@@ -771,6 +809,7 @@ async function searchLog(studentId) { // 학번에 대한 진료기록 조회
 
     if (!response.ok) {
         throw new Error("데이터 조회 실패");
+        return;
     }
 
     const result = await response.json();
