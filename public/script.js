@@ -1,9 +1,11 @@
 // ============================================================
 // 1. Supabase 설정
-// ============================================================
 const SB_URL = 'https://akkdzfuauaeukqhdrydp.supabase.co'; 
 const SB_KEY = 'sb_publishable_aVul9T_gOi8NDd70diW_gA_q0Yzwotl';
 const _supabase = supabase.createClient(SB_URL, SB_KEY);
+
+// API 연동
+const API_URL = "http://localhost:8080";
 
 // ============================================================
 // 2. 설정: 증상별 대기 시간 가중치
@@ -16,6 +18,16 @@ const TIME_WEIGHTS = {
     '근골격계': 5,
     '기타': 5
 };
+
+//// 토큰 불러오기
+function getToken() {
+    const token = localStorage.getItem("accessToken");
+    if (token) {
+        return token;
+    } else {
+        throw new Error("토큰이 존재하지 않습니다.");
+    }
+}
 
 // ============================================================
 // 3. 화면 전환 함수
@@ -81,15 +93,50 @@ async function submitLog() {
     const food = foodChecked.value === 'true';
     const allergy = allergyChecked.value === 'true';
 
-    // 2. DB에 전송
-    const { error } = await _supabase.from('health_logs').insert([{
-        student_id: stId, eat: food, allergy: allergy, 
-        symptom_cat: cat, symptom_detail: detail, status: 'waiting',
-        is_agreed: true
-    }]);
+    // // 2. DB에 전송
+    // const { error } = await _supabase.from('health_logs').insert([{
+    //     student_id: stId, eat: food, allergy: allergy, 
+    //     symptom_cat: cat, symptom_detail: detail, status: 'waiting',
+    //     is_agreed: true
+    // }]);
 
-    if (error) {
-        showModal("오류 발생: " + error.message);
+    // if (error) {
+    //     showModal("오류 발생: " + error.message);
+    // } else {
+    //     // 성공 시 띄우는 알림도 모달로 변경
+    //     showModal("접수가 완료되었습니다.\n자리에 앉아 대기해주세요.");
+        
+    //     // 3. 폼 초기화
+    //     document.getElementById('stId').value = '';
+    //     document.getElementById('stDetail').value = '';
+    //     if (foodChecked) foodChecked.checked = false;
+    //     if (allergyChecked) allergyChecked.checked = false;
+        
+    //     // 대기 인원 갱신 및 첫 화면으로 이동
+    //     init(); 
+    //     showView('view-login');
+    // }
+
+    // DB 저장
+    const response = await fetch(`${API_URL}/api/health/student/logs`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            "student_id": stId,
+            "eat": food,
+            "allergy": allergy,
+            "symptom_cat": cat,
+            "symptom_detail": detail,
+            "is_agreed": privacyAgree.checked
+        })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+        alert("데이터 저장 중 오류가 발생했습니다.")
     } else {
         // 성공 시 띄우는 알림도 모달로 변경
         showModal("접수가 완료되었습니다.\n자리에 앉아 대기해주세요.");
@@ -110,16 +157,30 @@ async function submitLog() {
 // 5. 관리자 목록 불러오기 (처방 내역 입력칸 추가)
 // ============================================================
 async function fetchLogs() {
-    // 💡 [수정됨] .select('*') 로 처리하면 모든 컬럼을 가져옵니다. 
-    // 만약 특정 컬럼만 가져오고 있다면 treatment_record를 명시해야 합니다.
-    const { data, error } = await _supabase.from('health_logs')
-        .select('*') 
-        .order('created_at', { ascending: false })
-        .limit(50);
-    
-    if (error) return console.error("목록 로딩 실패:", error);
+    let result;
+
+    try {
+        const response = await fetch(`${API_URL}/api/health/admin/logs`, {
+            headers: {
+                Authorization: `Bearer ${getToken()}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error("목록 조회 실패");
+            return;
+        }
+
+        result = await response.json();
+        console.log(`result :\n${result}`);
+    }
+    catch (error) {
+        console.log(error);
+        return; 
+    }
 
     const body = document.getElementById('log-body');
+    const data = result.data || [];
 
     // [현장 접수용 맨 윗줄]
     const inputRow = `
@@ -174,26 +235,46 @@ async function fetchLogs() {
 // ============================================================
 // 6. [수정됨] 완료 처리 (처방 내역 DB 반영 로직 추가)
 // ============================================================
-async function completeLog(id) {
-    // 💡 [수정] 입력창에서 처방 내역 가져오기
-    const treatmentText = document.getElementById(`treat-${id}`).value;
-    
-    if(!confirm("진료를 완료 처리하시겠습니까?")) return;
-    
-    // 1. DB 업데이트 (treatment_record 추가!)
-    const { error } = await _supabase
-        .from('health_logs')
-        .update({ 
-            status: 'done',
-            treatment_record: treatmentText // 👈 DB에 내역 저장!
-        })
-        .eq('id', id);
+async function completeLog(studentId) {
+    // // 💡 [수정] 입력창에서 처방 내역 가져오기
+    const treatment = document.getElementById(`treat-${studentId}`)
+    const treatmentText = treatment.value;
 
-    if (error) {
-        alert("처리에 실패했습니다: " + error.message);
+    if (treatmentText) {
+        if(!confirm(`진료 완료 처리를 하시겠습니까?\n처방 내용 : ${treatmentText}`)) return;
+
+        // DB 내용 업데이트
+        const response = await fetch(`${API_URL}/api/health/admin/logs/${studentId}/complete`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${getToken()}`
+            },
+            body: JSON.stringify({
+                "treatment_record": treatmentText
+            })
+        });
+        
+        const result = await response.json();
+
+        if (!response.ok) {
+            if (result.code === "E404") {
+                alert("입력한 학번에 맞는 학생의 진료 기록이 존재하지 않습니다.");
+                treatment.value = "";
+            } else if (result.code === "E400") {
+                alert("이미 진료 완료 처리 되었습니다.");
+                treatment.value = "";
+            } else {
+                alert("진료 완료 처리 중 오류가 발생했습니다.");
+                treatment.value = "";
+            }
+        } else {
+            alert("진료 완료 처리 되었습니다.");
+            await fetchLogs() // 리스트 갱신
+            await init(); // 대기 인원 수 계산
+        }
     } else {
-        await fetchLogs(); // 리스트 갱신
-        await init();      // 대기 인원수 갱신
+        alert("처방 내용을 입력하세요.");
     }
 }
 
@@ -203,16 +284,31 @@ async function completeLog(id) {
 async function adminLogin() {
     const pwInput = document.getElementById('pw');
     const inputPw = pwInput.value;
-    
-    // DB에서 관리자 비밀번호 가져오기 (코드에 비밀번호 노출 X)
-    const { data, error } = await _supabase.from("login").select("*").eq("id", 1).single();
-    
-    if (error || !data) {
-        showModal("관리자 정보를 불러올 수 없습니다.");
-        return;
-    }
 
-    if (inputPw === data.password) {
+    const response = await fetch(`${API_URL}/api/health/admin/auth/login`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            password: inputPw
+        })
+    });
+
+    const result = await response.json();
+    console.log(result);
+
+    // 에러 여부 저장
+    const isError = result.code[0] === "E" ? true : false;
+    
+    // 모달창 띄우기
+    if (isError) { // 로그인 실패
+        showModal("비밀번호가 틀렸습니다.\n다시 확인해주세요.");
+        pwInput.value = ''; // 실패 시 다시 입력할 수 있게 칸 비우기
+    } else { // 로그인 성공
+        // 토큰 저장
+        localStorage.setItem("accessToken", result.data.token);
+
         pwInput.value = ''; // 성공 시 입력칸 비우기
         showView('view-admin');
 
@@ -224,10 +320,6 @@ async function adminLogin() {
         } else { // 존재하지 않으면 -> 버튼 보이기
             fileLoader.classList.remove("hidden");
         }
-    } else if (inputPw !== "") {
-        // 기존 alert 대신 예쁜 모달창 띄우기
-        showModal("비밀번호가 틀렸습니다.\n다시 확인해주세요.");
-        pwInput.value = ''; // 실패 시 다시 입력할 수 있게 칸 비우기
     }
 }
 
@@ -235,88 +327,41 @@ async function adminLogin() {
 // ============================================================
 // 8. 엑셀 다운로드
 // ============================================================
-// async function downloadCSV(filename, startDate, endDate) {
-//     const fileLoader = document.getElementById("file-upload");
-//     if (!fileLoader.classList.contains("hidden")) { // 명렬표 파일이 업로드 되지 않은 경우
-//         alert("먼저 명렬표 파일을 업로드 한 후에 시도하세요.");
-//     } else {
-//         const { data } = await _supabase.from('health_logs') // DB에서 데이터 받아오기
-//             .select('*')
-//             .gte("created_at", startDate)
-//             .lte("created_at", endDate)
-//             .order("created_at", { ascending: true });
-        
-//         // localStorage에서 명렬표 불러와서 이름 추가
-//         const studentMap = JSON.parse(localStorage.getItem("studentMap") || "{}");
-//         const dataWithName = data.map(row => ({
-//             ...row,
-//             name: studentMap[String(row.student_id)] || null
-//         }));
-
-//         // 서버에 요청 보내기
-//         fetch("/save", {
-//             method: "POST",
-//             headers: {
-//                 "Content-type": "application/json"
-//             },
-//             body: JSON.stringify(dataWithName)
-//         })
-//         .then((res) => {
-//             if (!res.ok) throw new Error('서버 오류');  // 에러 응답 체크
-//             return res.blob();
-//         })
-//         .then((blob) => { // 다운로드 URL 생성 후 자동 클릭 처리 -> 파일 다운로드
-//             const url = URL.createObjectURL(blob);
-//             const a = document.createElement('a');
-//             a.href = url;
-            
-//             const today = new Date().toLocaleDateString('ko-KR', {
-//                 year: 'numeric',
-//                 month: '2-digit',
-//                 day: '2-digit'
-//             }).replace(/\. /g, '-').replace('.', ''); // 2026-03-25 형태로 변환
-
-//             a.download = `${filename}.xlsx`;
-            
-//             a.click();
-//             URL.revokeObjectURL(url);
-//         })
-//         .catch((error) => console.error(error.message))
-//     }
-// }
-
 async function downloadCSV(filename, startDate, endDate) {
-    const fileLoader = document.getElementById("file-upload");
-    if (!fileLoader.classList.contains("hidden")) {
-        return;
-    }   
-    
-    const { data, error } = await _supabase.from('health_logs')
-        .select('*')
-        .gte("created_at", startDate)
-        .lte("created_at", endDate)
-        .order("created_at", { ascending: false });                                                                                                                                       
+    // API 호출
+    const response = await fetch(`${API_URL}/api/health/admin/logs/export?start=${startDate}&end=${endDate}`, {
+        headers: {
+            Authorization: `Bearer ${getToken()}`
+        }
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+        if (result.code === "E400") {
+            alert("기간이 설정되지 않았습니다.");
+        }
+    } else {
+        const studentMap = JSON.parse(localStorage.getItem("studentMap") || "{}");
+        const data = result.data;
         
-    if (error) { console.error(error); return; }
-    
-    const studentMap = JSON.parse(localStorage.getItem("studentMap") || "{}");
-    
-    const records = data.map(row => ({
-        "날짜": row.created_at.substr(0, 10),
-        "학번": row.student_id,
-        "이름": studentMap[String(row.student_id)] || null,
-        "식사 여부": row.eat ? "O" : "X",
-        "알러지 여부": row.allergy ? "O" : "X",
-        "증상": row.symptom_cat,
-        "세부 증상": row.symptom_detail,
-        "처방 내용": row.treatment_record,
-        "처리 상태": row.status === 'done' ? "처리 완료" : "처리 중"
-    }));
-    
-    const sheet = XLSX.utils.json_to_sheet(records);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, sheet, 'Records');
-    XLSX.writeFile(workbook, `${filename}.xlsx`); 
+        const records = data.map(row => ({
+            "날짜": row.created_at.substr(0, 10),
+            "학번": row.student_id,
+            "이름": studentMap[String(row.student_id)] || null,
+            "식사 여부": row.eat ? "O" : "X",
+            "알러지 여부": row.allergy ? "O" : "X",
+            "증상": row.symptom_cat,
+            "세부 증상": row.symptom_detail,
+            "처방 내용": row.treatment_record,
+            "처리 상태": row.status === 'done' ? "처리 완료" : "처리 중"
+        }));
+        
+        const sheet = XLSX.utils.json_to_sheet(records);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, sheet, 'Records');
+        XLSX.writeFile(workbook, `${filename}.xlsx`); 
+    }
  }
 
 // 날짜 포멧팅 함수
@@ -338,6 +383,13 @@ function dateFormatting(date, type) {
 
 // 기간 선택 모달
 function downloadModal() {
+    // 명단표 업로드 확인
+    const fileLoader = document.getElementById("file-upload");
+    if (!fileLoader.classList.contains("hidden")) {
+        alert("명단표를 먼저 업로드해주세요.");
+        return;
+    }
+    
     const downloadModal = document.getElementById("download-modal");
     modalControl(downloadModal, "show");
 }
@@ -463,17 +515,16 @@ async function getWeather() {
 // 10. 초기화 및 대기 인원 계산
 // ============================================================
 async function init() {
-    // 'waiting' 상태인 사람만 가져옴
-    const { data, count, error } = await _supabase
-        .from('health_logs')
-        .select('symptom_cat', { count: 'exact' })
-        .eq('status', 'waiting');
+    // 대기 인원 및 대기 시간 계산하여 화면에 적용
+    const response = await fetch(`${API_URL}/api/health/logs/waiting`);
 
-    if (!error) {
-        let totalMinutes = 0;
-        if (data) {
-            data.forEach(log => totalMinutes += (TIME_WEIGHTS[log.symptom_cat] || 5));
-        }
+    if (!response.ok) {
+        throw new Error("대기 인원 조회에 실패하였습니다.");
+        console.log(error)
+    } else {
+        const result = await response.json();
+        const count = result.data.count;
+        const totalMinutes = result.data.estimated_minutes;
 
         const infoDiv = document.getElementById('main-wait-info');
         if (count > 0) {
@@ -566,17 +617,35 @@ async function closeEditModal(type, object) {
     
         // 시간 데이터 불러오기
         const logedTime = localStorage.getItem("time")
-    
-        // DB에 반영
-        const newData = {
-            student_id: studentId, eat: editedEat, allergy: editedAllergy,
-            symptom_cat: editedCat, symptom_detail: editedDetail, treatment_record: editedTreatment
+
+        // DB 내용 업데이트
+        const response = await fetch(`${API_URL}/api/health/admin/logs/${localStorage.getItem("dataId")}`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${getToken()}`
+            },
+            body: JSON.stringify({
+                "eat": editedEat,
+                "allergy": editedAllergy,
+                "symptom_cat": editedCat,
+                "symptom_detail": editedDetail,
+                "treatment_record": editedTreatment
+            })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            if (result.code === "E404") {
+                alert("데이터가 존재하지 않습니다.");
+            }
+        } else {
+            await init();
+            await fetchLogs();
         }
-    
-        const { data, error } = await _supabase.from('health_logs')
-            .update(newData)
-            .eq("created_at", logedTime)
-            .eq("student_id", studentId)
+
+
     } else if (type === "new") {
 
     }
@@ -615,10 +684,24 @@ async function editContent(object) {
     const closeBtn = document.getElementById("edit-close-btn")
 
     // 학생 데이터 불러오기
-    const { data, error } = await _supabase.from("health_logs").select("*").eq("student_id", studentId)
+    // const { data, error } = await _supabase.from("health_logs").select("*").eq("student_id", studentId)
+    const response = await fetch(`${API_URL}/api/health/admin/logs/student/${studentId}`, {
+        headers: {
+            Authorization: `Bearer ${getToken()}`
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`${studentId} 학생의 진료 기록을 불러오는 중에 오류가 발생했습니다.`);
+        return;
+    }
+
+    const result = await response.json();
+    const data = result.data;
+
     data.forEach(d => {
-        if (error || !d) {
-            console.log(error)
+        if (!d) {
+            console.log("데이터가 존재하지 않습니다.");
         }
         else {
             // 수정하려는 학생의 기록이 여러개인 경우 선택한 기록만 필터링 (시간, 처방 내역으로 필터링)
@@ -658,6 +741,9 @@ async function editContent(object) {
 
                 // localStorage에 시간 데이터 저장
                 localStorage.setItem("time", d.created_at)
+
+                // 조회한 데이터의 id 값 저장
+                localStorage.setItem("dataId", d.id);
             }
         }
     })
@@ -715,21 +801,37 @@ function closeViewModal() {
 
 async function searchLog(studentId) { // 학번에 대한 진료기록 조회
     // 데이터 불러오기
-    const { data, error } = await _supabase.from('health_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .eq("student_id", studentId)
-    
-    if (error) { alert("학생의 진료기록을 불러오는 중 오류가 발생했습니다.") }
+    const response = await fetch(`${API_URL}/api/health/admin/logs/student/${studentId}`, {
+        headers: {
+            Authorization: `Bearer ${getToken()}`
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error("데이터 조회 실패");
+        return;
+    }
+
+    const result = await response.json();
+    const data = result.data;
 
     // 테이블에 띄우기
-    const viewTable = document.getElementById("view-table-body");
+    const viewTableBody = document.getElementById("view-table-body");
+
+    // 조회 결과 초기화
+    const viewTable = document.getElementById("view-table");
+    const rows = viewTable.querySelectorAll("tr"); 
+    
+    // 조회 내용만 삭제 -> 제목, 입력칸 삭제 X
+    for (let i = 2; i < rows.length; i++) {
+        rows[i].remove();
+    }
     
     // 각 데이터별로 처리
     data.forEach(d => {
         // 각 항목별 테이블 줄 생성
         const tr = document.createElement("tr");
-        viewTable.appendChild(tr);
+        viewTableBody.appendChild(tr);
         
         // 날짜 추가
         const timeTd = document.createElement("td");
@@ -777,24 +879,34 @@ async function submitData() {
 
     // 무결성 검사
     if (!stId) { return alert("학번이 입력되지 않았습니다.")}
+    
+    // 데이터 저장
+    const response = await fetch(`${API_URL}/api/health/admin/logs/direct`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${getToken()}`
+        },
+        body: JSON.stringify({
+            student_id: stId,
+            eat: eat,
+            allergy: allergy,
+            symptom_cat: cat,
+            symptom_detail: detail,
+            treatment_record: treatment
+        })
+    });
 
-    // DB에 데이터 저장 (treatment_record 추가)
-    const { error } = await _supabase.from('health_logs').insert([{
-        student_id: stId, 
-        name: null, 
-        eat: eat, 
-        allergy: allergy, 
-        symptom_cat: cat, 
-        symptom_detail: detail, 
-        treatment_record: treatment, // 추가됨
-        status: 'done' // 현장 접수 후 완료 처리를 위해 일단 대기로 둠 (원하면 'done'으로 변경 가능)
-    }]);
-
-    if (error) {
-        alert("오류 발생: " + error.message);
+    if (!response.ok) {
+        throw new Error("진료 기록 저장에 실패했습니다.");
+        alert("진료 기록 저장 중 오류가 발생했습니다.");
     } else {
+        const result = await response.json();
+        console.log(result);
+
         await fetchLogs();
-        await init();
         await searchLog(stId);
-    }  
+        await init();
+    }
+    
 }
