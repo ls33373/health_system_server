@@ -291,37 +291,40 @@ async function adminLogin() {
 // 8. 엑셀 다운로드
 // ============================================================
 async function downloadCSV(filename, startDate, endDate) {
-    const fileLoader = document.getElementById("file-upload");
-    if (!fileLoader.classList.contains("hidden")) {
-        return;
-    }   
-    
-    const { data, error } = await _supabase.from('health_logs')
-        .select('*')
-        .gte("created_at", startDate)
-        .lte("created_at", endDate)
-        .order("created_at", { ascending: false });                                                                                                                                       
+    // API 호출
+    const response = await fetch(`${API_URL}/api/health/admin/logs/export?start=${startDate}&end=${endDate}`, {
+        headers: {
+            Authorization: `Bearer ${getToken()}`
+        }
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+        if (result.code === "E400") {
+            alert("기간이 설정되지 않았습니다.");
+        }
+    } else {
+        const studentMap = JSON.parse(localStorage.getItem("studentMap") || "{}");
+        const data = result.data;
         
-    if (error) { console.error(error); return; }
-    
-    const studentMap = JSON.parse(localStorage.getItem("studentMap") || "{}");
-    
-    const records = data.map(row => ({
-        "날짜": row.created_at.substr(0, 10),
-        "학번": row.student_id,
-        "이름": studentMap[String(row.student_id)] || null,
-        "식사 여부": row.eat ? "O" : "X",
-        "알러지 여부": row.allergy ? "O" : "X",
-        "증상": row.symptom_cat,
-        "세부 증상": row.symptom_detail,
-        "처방 내용": row.treatment_record,
-        "처리 상태": row.status === 'done' ? "처리 완료" : "처리 중"
-    }));
-    
-    const sheet = XLSX.utils.json_to_sheet(records);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, sheet, 'Records');
-    XLSX.writeFile(workbook, `${filename}.xlsx`); 
+        const records = data.map(row => ({
+            "날짜": row.created_at.substr(0, 10),
+            "학번": row.student_id,
+            "이름": studentMap[String(row.student_id)] || null,
+            "식사 여부": row.eat ? "O" : "X",
+            "알러지 여부": row.allergy ? "O" : "X",
+            "증상": row.symptom_cat,
+            "세부 증상": row.symptom_detail,
+            "처방 내용": row.treatment_record,
+            "처리 상태": row.status === 'done' ? "처리 완료" : "처리 중"
+        }));
+        
+        const sheet = XLSX.utils.json_to_sheet(records);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, sheet, 'Records');
+        XLSX.writeFile(workbook, `${filename}.xlsx`); 
+    }
  }
 
 // 날짜 포멧팅 함수
@@ -343,6 +346,13 @@ function dateFormatting(date, type) {
 
 // 기간 선택 모달
 function downloadModal() {
+    // 명단표 업로드 확인
+    const fileLoader = document.getElementById("file-upload");
+    if (!fileLoader.classList.contains("hidden")) {
+        alert("명단표를 먼저 업로드해주세요.");
+        return;
+    }
+    
     const downloadModal = document.getElementById("download-modal");
     modalControl(downloadModal, "show");
 }
