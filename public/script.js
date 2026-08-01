@@ -63,6 +63,7 @@ function modalControl(modal, mode) {
 // ============================================================
 async function submitLog() {
     const stId = document.getElementById('stId').value;
+    const stName = document.getElementById('stName').value;
     const cat = document.getElementById('stCat').value;
     const detail = document.getElementById('stDetail').value;
 
@@ -81,6 +82,10 @@ async function submitLog() {
         showModal("학번을 입력해주세요!");
         return;
     }
+    if (!stName) {
+        showModal("이름을 입력해주세요!");
+        return;
+    }
     if (!foodChecked) {
         showModal("식사 여부를 체크해주세요!");
         return;
@@ -93,30 +98,6 @@ async function submitLog() {
     const food = foodChecked.value === 'true';
     const allergy = allergyChecked.value === 'true';
 
-    // // 2. DB에 전송
-    // const { error } = await _supabase.from('health_logs').insert([{
-    //     student_id: stId, eat: food, allergy: allergy, 
-    //     symptom_cat: cat, symptom_detail: detail, status: 'waiting',
-    //     is_agreed: true
-    // }]);
-
-    // if (error) {
-    //     showModal("오류 발생: " + error.message);
-    // } else {
-    //     // 성공 시 띄우는 알림도 모달로 변경
-    //     showModal("접수가 완료되었습니다.\n자리에 앉아 대기해주세요.");
-        
-    //     // 3. 폼 초기화
-    //     document.getElementById('stId').value = '';
-    //     document.getElementById('stDetail').value = '';
-    //     if (foodChecked) foodChecked.checked = false;
-    //     if (allergyChecked) allergyChecked.checked = false;
-        
-    //     // 대기 인원 갱신 및 첫 화면으로 이동
-    //     init(); 
-    //     showView('view-login');
-    // }
-
     // DB 저장
     const response = await fetch(`${API_URL}/api/health/student/logs`, {
         method: "POST",
@@ -125,6 +106,7 @@ async function submitLog() {
         },
         body: JSON.stringify({
             "student_id": stId,
+            "name": stName,
             "eat": food,
             "allergy": allergy,
             "symptom_cat": cat,
@@ -143,6 +125,7 @@ async function submitLog() {
         
         // 3. 폼 초기화
         document.getElementById('stId').value = '';
+        document.getElementById('stName').value = '';
         document.getElementById('stDetail').value = '';
         if (foodChecked) foodChecked.checked = false;
         if (allergyChecked) allergyChecked.checked = false;
@@ -187,6 +170,7 @@ async function fetchLogs() {
         <tr style="background: rgba(0, 122, 255, 0.05);">
             <td style="font-weight:bold; color:var(--ios-blue);">현장<br>접수</td>
             <td><input type="text" id="directId" placeholder="학번" /></td>
+            <td><input type="text" id="directName" placeholder="이름" /></td>
             <td></td>
             <td></td>
             <td></td>
@@ -209,6 +193,7 @@ async function fetchLogs() {
         <tr>
             <td>${timeStr}</td>
             <td>${log.student_id}</td>
+            <td>${log.name}</td>
             <td>${eatDisplay}</td>
             <td>${allergyDisplay}</td>
             <td><span class="badge">${log.symptom_cat}</span></td>
@@ -573,15 +558,21 @@ window.addEventListener('DOMContentLoaded', () => {
 // ============================================================
 async function submitDirectLog() {
     const stId = document.getElementById('directId');
+    const name = document.getElementById('directName');
 
     if (!stId.value) { return alert("학번을 입력해주세요."); }
-    else { localStorage.setItem("student_id", stId.value); } // 학번 저장
+    if (!name.value) { return alert("이름을 입력해주세요."); }
+    else {
+        localStorage.setItem("student_id", stId.value);
+        localStorage.setItem("student_name", name.value);
+    } // 학번과 이름 저장
 
     // 개인별 진료 기록 모달에서 나머지 내용 입력받기
     loadRecord() // 모달창 띄우기
 
-    // 학번 입력값 삭제
+    // 입력값 삭제
     stId.value = "";
+    name.value = "";
 }
 
 // ============================================================
@@ -680,11 +671,12 @@ async function editContent(object) {
     const selectRow = object.parentElement.parentElement.children
     const studentId = selectRow[1].innerText
 
+    console.log(selectRow);
+
     // 모달 창 닫기 버튼에 클릭 시 액션 추가
     const closeBtn = document.getElementById("edit-close-btn")
 
     // 학생 데이터 불러오기
-    // const { data, error } = await _supabase.from("health_logs").select("*").eq("student_id", studentId)
     const response = await fetch(`${API_URL}/api/health/admin/logs/student/${studentId}`, {
         headers: {
             Authorization: `Bearer ${getToken()}`
@@ -706,33 +698,35 @@ async function editContent(object) {
         else {
             // 수정하려는 학생의 기록이 여러개인 경우 선택한 기록만 필터링 (시간, 처방 내역으로 필터링)
             const timeStr = new Date(d.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-            const timeLog = selectRow[0].innerText
-            var treatment = selectRow[6].innerText
+            const timeLog = selectRow[0].innerText;
+            var treatment = selectRow[7].innerText;
 
             // 처방 내역에서 공백 제거
-            treatment = treatment.replaceAll(" ", "")
+            treatment = treatment.replaceAll(" ", "");
 
             if (timeStr === timeLog && treatment === d.treatment_record.replaceAll(" ", "")) {
-                const cat = selectRow[4].innerText
-                const eat = selectRow[2].innerText
-                const allergy = selectRow[3].innerText
+                const cat = selectRow[5].innerText;
+                const eat = selectRow[3].innerText;
+                const allergy = selectRow[4].innerText;
 
-                showCustomModal(document.getElementById("edit-modal"))
+                showCustomModal(document.getElementById("edit-modal"));
                 // 모달에 정보 띄우기
-                const catList = ["두통", "호흡기", "소화기", "순환기", "외상", "피부", "근골격계", "비뇨생식기계", "신경정신과",
-                                "이비인후과", "안과", "구강", "기타"]
-                const logedTime = document.getElementById("time")
-                const studentIdInput = document.getElementById("editId")
-                const detailInput = document.getElementById("editDetail")
-                const treatmentInput = document.getElementById("editTreatment")
+                const catList = ["두통", "호흡기", "소화기", "순환기", "외상", "피부", "근골격계", "비뇨생식기계", "신경정신계",
+                                "이비인후과", "안과", "구강", "기타"];
+                const logedTime = document.getElementById("time");
+                const studentIdInput = document.getElementById("editId");
+                const nameInput = document.getElementById("editName");
+                const detailInput = document.getElementById("editDetail");
+                const treatmentInput = document.getElementById("editTreatment");
 
-                const selectedCat = document.getElementById(`cat-${catList.indexOf(cat) + 1}`)
-                const selectedEat = document.getElementById(`eat-${eat === "O" ? "T" : "F"}`)
-                const selectedAllergy = document.getElementById(`allergy-${allergy === "O" ? "T" : "F"}`)
+                const selectedCat = document.getElementById(`cat-${catList.indexOf(cat) + 1}`);
+                const selectedEat = document.getElementById(`eat-${eat === "O" ? "T" : "F"}`);
+                const selectedAllergy = document.getElementById(`allergy-${allergy === "O" ? "T" : "F"}`);
     
                 // 입력창 내용 반영
                 logedTime.innerText = timeStr
                 studentIdInput.innerText = d.student_id
+                nameInput.value = d.name
                 detailInput.value = d.symptom_detail
                 treatmentInput.value = d.treatment_record
                 selectedCat.selected = true
@@ -760,11 +754,12 @@ function loadRecord() { // 모달 띄우기
 
     // 입력한 학번에 해당하는 학생의 진료기록 불러오기
     const studentId = localStorage.getItem("student_id");
+    const studentName = localStorage.getItem("student_name");
     searchLog(studentId);
 
     // 서브 타이틀 설정
     const subTitle = document.getElementById("modal-subtitle");
-    subTitle.innerText = `학번 : ${studentId}`
+    subTitle.innerText = `학번 : ${studentId} | 이름 : ${studentName}`
 
     /////// 개인별 조회 스크롤 바 추가 //////////
 }
@@ -871,14 +866,16 @@ async function searchLog(studentId) { // 학번에 대한 진료기록 조회
 async function submitData() {
     // 입력 정보 불러오기
     const stId = localStorage.getItem("student_id");
-    const eat = document.getElementById('directEat').value === 'true';
-    const allergy = document.getElementById('directAllergy').value === 'true';
-    const cat = document.getElementById('directCat').value;
-    const detail = document.getElementById('directDetail').value;
-    const treatment = document.getElementById('directTreatment').value;
+    const name = localStorage.getItem("student_name");
+    const eat = document.getElementById('directEat');
+    const allergy = document.getElementById('directAllergy');
+    const cat = document.getElementById('directCat');
+    const detail = document.getElementById('directDetail');
+    const treatment = document.getElementById('directTreatment');
 
     // 무결성 검사
     if (!stId) { return alert("학번이 입력되지 않았습니다.")}
+    if (!name) { return alert("이름이 입력되지 않았습니다.")}
     
     // 데이터 저장
     const response = await fetch(`${API_URL}/api/health/admin/logs/direct`, {
@@ -889,11 +886,12 @@ async function submitData() {
         },
         body: JSON.stringify({
             student_id: stId,
-            eat: eat,
-            allergy: allergy,
-            symptom_cat: cat,
-            symptom_detail: detail,
-            treatment_record: treatment
+            name: name,
+            eat: eat.value === "true",
+            allergy: allergy.value === "true",
+            symptom_cat: cat.value,
+            symptom_detail: detail.value,
+            treatment_record: treatment.value
         })
     });
 
@@ -903,6 +901,13 @@ async function submitData() {
     } else {
         const result = await response.json();
         console.log(result);
+
+        // 입력 내용 삭제
+        eat.value = "false";
+        allergy.value = "false";
+        cat.value = "두통";
+        detail.value = "";
+        treatment.value = "";
 
         await fetchLogs();
         await searchLog(stId);

@@ -251,7 +251,7 @@ td {
 }
 
 /* 현장 접수 버튼 */
-#directId, .directId {
+#directId, .directId, #directName, .directName {
   width: 100%;
   padding: 0.5vh;
   border: 1px solid #ddd;
