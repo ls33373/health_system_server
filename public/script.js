@@ -296,15 +296,6 @@ async function adminLogin() {
 
         pwInput.value = ''; // 성공 시 입력칸 비우기
         showView('view-admin');
-
-        // localStorage에 명렬표가 저장되어 있으면 파일업로드 버튼 안 띄우기
-        const fileLoader = document.getElementById("file-upload");
-        const studentMap = localStorage.getItem("studentMap");
-        if (studentMap) { // 명렬표가 존재하면 -> 버튼 숨김 처리
-            fileLoader.classList.add("hidden");
-        } else { // 존재하지 않으면 -> 버튼 보이기
-            fileLoader.classList.remove("hidden");
-        }
     }
 }
 
@@ -333,7 +324,7 @@ async function downloadCSV(filename, startDate, endDate) {
         const records = data.map(row => ({
             "날짜": row.created_at.substr(0, 10),
             "학번": row.student_id,
-            "이름": studentMap[String(row.student_id)] || null,
+            "이름": row.name || "",
             "식사 여부": row.eat ? "O" : "X",
             "알러지 여부": row.allergy ? "O" : "X",
             "증상": row.symptom_cat,
@@ -367,14 +358,7 @@ function dateFormatting(date, type) {
 }
 
 // 기간 선택 모달
-function downloadModal() {
-    // 명단표 업로드 확인
-    const fileLoader = document.getElementById("file-upload");
-    if (!fileLoader.classList.contains("hidden")) {
-        alert("명단표를 먼저 업로드해주세요.");
-        return;
-    }
-    
+function downloadModal() {    
     const downloadModal = document.getElementById("download-modal");
     modalControl(downloadModal, "show");
 }
@@ -387,96 +371,6 @@ function startDownload() {
     // 엑셀 파일 다운로드
     downloadCSV(`보건실 이용 기록(${dateFormatting(startDate, "yyyy년 mm월 dd일")}~${dateFormatting(endDate, "yyyy년 mm월 dd일")})`,
                 dateFormatting(startDate, "ISO-m"), dateFormatting(endDate, "ISO-M"));
-}
-
-// ========================
-// 수동 입력 기능
-// ========================
-// function loadValue() {
-//     const idInput = document.getElementById("manual-student-id");
-//     const dateInput = document.getElementById("manual-date");
-//     const eatInput = document.getElementById("manualEat");
-//     const allergyInput = document.getElementById("manualAllergy");
-//     const catInput = document.getElementById("manualCat");
-//     const detailInput = document.getElementById("manualDetail");
-//     const treatmentInput = document.getElementById("manualTreatment");
-
-//     return dateInput.value, idInput.value, eatInput.value, allergyInput.value,
-//             catInput.value, detailInput.value, treatmentInput.value;
-// }
-
-// function manualInput() {
-//     // 모달 보이기
-//     const modal = document.getElementById('manual-input-modal');
-//     modal.style.opacity = '1';
-//     modal.style.pointerEvents = 'auto';
-
-//     // 입력창 초기화
-//     const { date, id, eat, allergy, cat, detail, treatment } = loadValue();
-//     [date, id, eat, allergy, cat, detail, treatment].forEach(e => {
-//         e.value = "";
-//     });
-// }
-
-// async function saveData() {
-//     const { date, id, eat, allergy, cat, detail, treatment } = loadValue();
-
-//     // 데이터 검사
-//     // const objectList = [date, id, eat, allergy, cat, detail, treatment];
-//     // const textList = ["날짜", "학번", "식사 여부", "알러지 여부", "증상", "자세한 증상", "진료/처방 내역"]
-//     // for (let i = 0; i > 7; i++) {
-//     //     if (!objectList[i]) { alert(`${textList[i]}을/를 입력해주세요.`); break }
-//     // }
-
-//     // // DB에 저장
-//     // const { error } = await _supabase.from('health_logs').insert([{
-//     //     created_at: date,
-//     //     student_id: id, 
-//     //     name: null, 
-//     //     eat: eat, 
-//     //     allergy: allergy, 
-//     //     symptom_cat: cat, 
-//     //     symptom_detail: detail, 
-//     //     treatment_record: treatment, // 추가됨
-//     //     status: 'done' // 현장 접수 후 완료 처리를 위해 일단 대기로 둠 (원하면 'done'으로 변경 가능)
-//     // }]);
-
-//     // if (error) {
-//     //     alert("오류 발생: " + error.message);
-//     // } else {
-//     //     await fetchLogs();
-//     //     await init();
-//     // }
-// }
-
-// ================================================
-// 명렬표 업로드
-// ================================================
-
-function uploadStudents() {
-    const file = document.getElementById('studentFile').files[0];
-    if (!file) return alert('파일을 선택해주세요.');
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const workbook = XLSX.read(e.target.result, { type: 'binary' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json(sheet);
-
-        // { 학번: 이름 } 형태로 변환해서 localStorage에 저장
-        const studentMap = {};
-        data.forEach(row => {
-            studentMap[String(row.학번)] = row.이름;
-        });
-        localStorage.setItem('studentMap', JSON.stringify(studentMap));
-
-        // 파일 업로더 숨김 처리
-        const fileLoader = document.getElementById("file-upload");
-        fileLoader.classList.add("hidden");
-
-        console.log(`명렬표 저장 완료: ${data.length}명`);
-    };
-    reader.readAsBinaryString(file);
 }
 
 // ============================================================
