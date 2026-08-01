@@ -71,6 +71,7 @@
         <div class="scroll-content">
           <div class="input-group">
             <input type="text" id="stId" placeholder="학번 (예: 10101)" />
+            <input type="text" id="stName" placeholder="이름 (예: 홍길동)" />
           </div>
 
           <div class="section-group">
@@ -148,6 +149,7 @@
               <tr>
                 <th>시간</th>
                 <th>학번</th>
+                <th>이름</th>
                 <th>식사</th>
                 <th>알러지</th>
                 <th style="width: 80px;">증상</th> 
@@ -202,6 +204,7 @@
         <tr>
           <td>시간</td>
           <td>학번</td>
+          <td>이름</td>
           <td>식사</td>
           <td>알러지</td>
           <td>증상</td>
@@ -211,6 +214,7 @@
         <tr>
           <td><p id="time"></p></td>
           <td><p id="editId"></p></td>
+          <td><input type="text" id="editName" class="directName" /></td>
           <td>
             <select id="editEat" class="directEat">
               <option value="false" id="eat-F">X</option>
