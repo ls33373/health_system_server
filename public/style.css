@@ -161,7 +161,12 @@ body {
 .app-icon-btn span { font-size: 2.5vh; font-weight: 700; color: #333; }
 
 /* 입력 폼 요소 (높이와 글씨 크기 vh 통일) */
-.scroll-content { flex: 1; overflow-y: auto; padding-right: 1vh; }
+.scroll-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 1vh;
+  max-width: 100%;
+}
 .input-group { display: flex; gap: 2vh; margin-bottom: 2vh; }
 
 input, select, textarea {
