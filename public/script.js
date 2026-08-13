@@ -47,6 +47,21 @@ function showView(viewId) {
         
         // 관리자 화면으로 갈 때 데이터 불러오기
         if (viewId === 'view-admin') fetchLogs();
+
+        // 학생 접수 화면으로 갈 때 접수 화면 크기 조절
+        if (viewId === "view-student") {
+            const nowDevice = /Windows|Linux/i.test(navigator.userAgent) ? "PC" : "Mobile";
+
+            if (nowDevice === "PC") {
+                const studentWrite = document.getElementById("student-write");
+                studentWrite.style.width = "40%";
+
+                ///////////// 실제 서비스 전에 전자칠판에서 화면 크기 다시 확인하고 재조정 (몸으로 가려지는지 확인)
+                ///////////// navigator.userAgent 값 확인해서 정규식 수정
+                ///////////// 적용 여부 확인하고 서버에 올리기
+                ///////////// 크롬북에서도 확인해보고 크기 자동 수정 반영하기
+            }
+        }
     }
 }
 
@@ -429,13 +444,13 @@ async function init() {
 // 11. 실시간 감지 (보조 역할)
 // ============================================================
 // 다른 컴퓨터에서 접속했을 때 업데이트를 받기 위한 용도입니다.
-_supabase
-  .channel('public:health_logs')
-  .on('postgres_changes', { event: '*', schema: 'public', table: 'health_logs' }, (payload) => {
-      console.log('DB 변경됨:', payload);
-      init(); 
-  })
-  .subscribe();
+// _supabase
+//   .channel('public:health_logs')
+//   .on('postgres_changes', { event: '*', schema: 'public', table: 'health_logs' }, (payload) => {
+//       console.log('DB 변경됨:', payload);
+//       init(); 
+//   })
+//   .subscribe();
 
 // 페이지 로드 시 실행
 window.addEventListener('DOMContentLoaded', () => {
