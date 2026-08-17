@@ -335,9 +335,13 @@ async function downloadCSV(filename, startDate, endDate) {
     } else {
         const studentMap = JSON.parse(localStorage.getItem("studentMap") || "{}");
         const data = result.data;
+
+        data.map(d => {
+            console.log(d);
+        });
         
         const records = data.map(row => ({
-            "날짜": row.created_at.substr(0, 10),
+            "날짜": row.created_at,
             "학번": row.student_id,
             "이름": row.name || "",
             "식사 여부": row.eat ? "O" : "X",
