@@ -5,7 +5,7 @@ const SB_KEY = 'sb_publishable_aVul9T_gOi8NDd70diW_gA_q0Yzwotl';
 const _supabase = supabase.createClient(SB_URL, SB_KEY);
 
 // API 연동
-const API_URL = "http://localhost:8080";
+const API_URL = "http://localhost:8081";
 
 // ============================================================
 // 2. 설정: 증상별 대기 시간 가중치
@@ -27,6 +27,99 @@ function getToken() {
     } else {
         throw new Error("토큰이 존재하지 않습니다.");
     }
+}
+
+// 토큰 재발급
+async function refreshAccessToken() {
+    const refreshToken = localStorage.getItem("refreshToken");
+
+    if (!refreshToken) {
+        return false;
+    }
+
+    try {
+        const response = await fetch(
+            `${API_URL}/api/health/admin/auth/refresh`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    refresh_token: refreshToken
+                })
+            }
+        );
+
+        if (!response.ok) {
+            return false;
+        }
+
+        const result = await response.json();
+
+        localStorage.setItem(
+            "accessToken",
+            result.data.token
+        );
+
+        return true;
+
+    } catch (error) {
+        console.error("Access Token 재발급 실패:", error);
+        return false;
+    }
+}
+
+// 인증 후 요청
+async function authFetch(url, options = {}) {
+
+    const accessToken = getToken();
+
+    const headers = {
+        ...(options.headers || {}),
+        "Authorization": `Bearer ${accessToken}`
+    };
+
+    let response = await fetch(url, {
+        ...options,
+        headers
+    });
+
+    // Access Token 만료
+    if (response.status === 401) {
+
+        console.log("Access Token 만료 → 재발급 시도");
+
+        const refreshed = await refreshAccessToken();
+
+        if (!refreshed) {
+            console.log("Refresh Token도 만료됨");
+
+            localStorage.removeItem("accessToken");
+            localStorage.removeItem("refreshToken");
+
+            // 페이지 새로고침
+            location.reload();
+
+            return response;
+        }
+
+        // 새 Access Token
+        const newAccessToken = getToken();
+
+        const retryHeaders = {
+            ...(options.headers || {}),
+            "Authorization": `Bearer ${newAccessToken}`
+        };
+
+        // 원래 요청 다시 실행
+        response = await fetch(url, {
+            ...options,
+            headers: retryHeaders
+        });
+    }
+
+    return response;
 }
 
 // ============================================================
@@ -158,11 +251,7 @@ async function fetchLogs() {
     let result;
 
     try {
-        const response = await fetch(`${API_URL}/api/health/admin/logs`, {
-            headers: {
-                Authorization: `Bearer ${getToken()}`
-            }
-        });
+        const response = await authFetch(`${API_URL}/api/health/admin/logs`,);
 
         if (!response.ok) {
             throw new Error("목록 조회 실패");
@@ -195,6 +284,7 @@ async function fetchLogs() {
                 <button class="btn-primary" style="padding:0.5vh 1.5vh; font-size:1.5vh; border-radius:1vh; border:none; cursor:pointer; white-space:nowrap;" onclick="submitDirectLog()">+ 추가</button>
             </td>
             <td></td>
+            <td></td>
         </tr>
     `;
 
@@ -226,6 +316,9 @@ async function fetchLogs() {
             <td>
                 <button class="btn-primary" style="padding:0.5vh 1.5vh; font-size:1.5vh; border-radius:1vh; border:none; cursor:pointer; white-space:nowrap;" onclick="editContent(this)">수정</button>
             </td>
+            <td>
+                <button class="btn-delete" style="padding:0.5vh 1.5vh; font-size:1.5vh; border-radius:1vh; border:none; cursor:pointer; white-space:nowrap;" onclick="deleteLog(${log.id})">삭제</button>
+            </td>
         </tr>
     `}).join('');
     
@@ -244,11 +337,11 @@ async function completeLog(studentId) {
         if(!confirm(`진료 완료 처리를 하시겠습니까?\n처방 내용 : ${treatmentText}`)) return;
 
         // DB 내용 업데이트
-        const response = await fetch(`${API_URL}/api/health/admin/logs/${studentId}/complete`, {
+        const response = await authFetch(`${API_URL}/api/health/admin/logs/${studentId}/complete`,
+        {
             method: "PUT",
             headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${getToken()}`
+                "Content-Type": "application/json"
             },
             body: JSON.stringify({
                 "treatment_record": treatmentText
@@ -308,6 +401,7 @@ async function adminLogin() {
     } else { // 로그인 성공
         // 토큰 저장
         localStorage.setItem("accessToken", result.data.token);
+        localStorage.setItem("refreshToken", result.data.refresh_token);
 
         pwInput.value = ''; // 성공 시 입력칸 비우기
         showView('view-admin');
@@ -320,11 +414,7 @@ async function adminLogin() {
 // ============================================================
 async function downloadCSV(filename, startDate, endDate) {
     // API 호출
-    const response = await fetch(`${API_URL}/api/health/admin/logs/export?start=${startDate}&end=${endDate}`, {
-        headers: {
-            Authorization: `Bearer ${getToken()}`
-        }
-    });
+    const response = await authFetch(`${API_URL}/api/health/admin/logs/export?start=${startDate}&end=${endDate}`, {});
 
     const result = await response.json();
 
@@ -458,6 +548,8 @@ async function init() {
 
 // 페이지 로드 시 실행
 window.addEventListener('DOMContentLoaded', () => {
+    console.log("페이지 로드 완료");
+
     const loginView = document.getElementById('view-login');
     loginView.classList.remove('hidden');
     setTimeout(() => loginView.classList.add('active'), 10);
@@ -523,11 +615,10 @@ async function closeEditModal(type, object) {
         const logedTime = localStorage.getItem("time")
 
         // DB 내용 업데이트
-        const response = await fetch(`${API_URL}/api/health/admin/logs/${localStorage.getItem("dataId")}`, {
+        const response = await authFetch(`${API_URL}/api/health/admin/logs/${localStorage.getItem("dataId")}`, {
             method: "PUT",
             headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${getToken()}`
             },
             body: JSON.stringify({
                 "eat": editedEat,
@@ -590,11 +681,7 @@ async function editContent(object) {
     const closeBtn = document.getElementById("edit-close-btn")
 
     // 학생 데이터 불러오기
-    const response = await fetch(`${API_URL}/api/health/admin/logs/student/${studentId}`, {
-        headers: {
-            Authorization: `Bearer ${getToken()}`
-        }
-    });
+    const response = await authFetch(`${API_URL}/api/health/admin/logs/student/${studentId}`, {});
 
     if (!response.ok) {
         throw new Error(`${studentId} 학생의 진료 기록을 불러오는 중에 오류가 발생했습니다.`);
@@ -656,6 +743,36 @@ async function editContent(object) {
     })
 }
 
+// ============================================================
+// 내용 삭제
+// ============================================================
+async function deleteLog(logId, studentId = null) {
+    if (!confirm("정말로 삭제하시겠습니까?")) return;
+
+    const response = await authFetch(`${API_URL}/api/health/admin/logs/${logId}`, {
+        method: "DELETE"
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+        if (result.code === "E404") {
+            alert("삭제할 데이터가 존재하지 않습니다.");
+        } else {
+            alert("데이터 삭제 중 오류가 발생했습니다.");
+        }
+    } else {
+        alert("데이터가 삭제되었습니다.");
+        await fetchLogs(); // 리스트 갱신
+        await init(); // 대기 인원 수 계산
+
+        if (studentId) {
+            // 개인별 진료기록 모달에서 다시 조회
+            searchLog(studentId);
+        }
+    }
+}
+
 // =======================
 // 개인별 진료기록 확인
 // =======================
@@ -673,8 +790,6 @@ function loadRecord() { // 모달 띄우기
     // 서브 타이틀 설정
     const subTitle = document.getElementById("modal-subtitle");
     subTitle.innerText = `학번 : ${studentId} | 이름 : ${studentName}`
-
-    /////// 개인별 조회 스크롤 바 추가 //////////
 }
 
 function closeViewModal() {
@@ -709,11 +824,7 @@ function closeViewModal() {
 
 async function searchLog(studentId) { // 학번에 대한 진료기록 조회
     // 데이터 불러오기
-    const response = await fetch(`${API_URL}/api/health/admin/logs/student/${studentId}`, {
-        headers: {
-            Authorization: `Bearer ${getToken()}`
-        }
-    });
+    const response = await authFetch(`${API_URL}/api/health/admin/logs/student/${studentId}`, {});
 
     if (!response.ok) {
         throw new Error("데이터 조회 실패");
@@ -770,6 +881,15 @@ async function searchLog(studentId) { // 학번에 대한 진료기록 조회
         const treatmentTd = document.createElement("td");
         treatmentTd.innerText = d.treatment_record;
         tr.appendChild(treatmentTd);
+
+        // 삭제 버튼 추가
+        const deleteBtn = document.createElement("button");
+        deleteBtn.className = "btn-delete";
+        deleteBtn.style.cssText = "padding:0.5vh 1.5vh; font-size:1.5vh; border-radius:1vh; border:none;\
+                                   cursor:pointer; white-space:nowrap;";
+        deleteBtn.innerText = "삭제";
+        deleteBtn.onclick = () => deleteLog(d.id, d.student_id);
+        tr.appendChild(deleteBtn);
     })
 }
 
@@ -791,11 +911,10 @@ async function submitData() {
     if (!name) { return alert("이름이 입력되지 않았습니다.")}
     
     // 데이터 저장
-    const response = await fetch(`${API_URL}/api/health/admin/logs/direct`, {
+    const response = await authFetch(`${API_URL}/api/health/admin/logs/direct`, {
         method: "POST",
         headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${getToken()}`
+            "Content-Type": "application/json"
         },
         body: JSON.stringify({
             student_id: stId,

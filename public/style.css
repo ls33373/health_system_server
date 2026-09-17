@@ -196,6 +196,7 @@ input:focus, textarea:focus, select:focus { background: #fff; box-shadow: 0 0 0 
 button { cursor: pointer; border: none; font-size: 2.2vh; border-radius: 2vh; padding: 2vh; font-weight: 700; }
 .btn-primary { flex: 2; background: var(--ios-blue); color: white; }
 .btn-secondary { flex: 1; background: #e5e5ea; color: #333; }
+.btn-delete { flex: 1; background: #ff3b30; color: white; }
 
 /* 미니 컨트롤 버튼 */
 .mini-controls { display: flex; gap: 1vh; }
